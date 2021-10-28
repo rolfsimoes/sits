@@ -833,13 +833,16 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
 
             cld_values <- as.matrix(cld_values)
             cld_rows <- nrow(cld_values)
-            cld_values <- matrix(bitwAnd(cld_values, sum(2 ^ cld_index)),
-                                 nrow = cld_rows)
+            cld_values <- (matrix(bitwAnd(cld_values, sum(2 ^ cld_index)),
+                                 nrow = cld_rows) > 0)
+        } else {
+
+            cld_values <- cld_values %in% cld_index
         }
     }
 
     # Retrieve values on a band by band basis
-    ts_bands <- lapply(bands, function(band) {
+    ts_bands <- purrr::map(bands, function(band) {
 
         # get the values of the time series as matrix
         values_band <- ts$time_series[[1]][[band]]
@@ -871,12 +874,7 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
 
             # include information from cloud band
             if (!purrr::is_null(cld_band)) {
-                if (.source_cloud_bit_mask(
-                    source = .cube_source(cube = cube),
-                    collection = .cube_collection(cube = cube)))
-                    values_band[cld_values > 0] <- NA
-                else
-                    values_band[cld_values %in% cld_index] <- NA
+                values_band[cld_values] <- NA
             }
 
             # adjust maximum and minimum values
@@ -898,6 +896,18 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
                                         collection = cube$collection[[1]],
                                         bands = bands)
 
+    # create cloud column in sits tibble
+    if (!purrr::is_null(cld_band)) {
+
+        ts_cloud <- list(cld_values) %>%
+            purrr::set_names(.source_cloud()) %>%
+            tibble::as_tibble()
+
+        ts_cloud <- dplyr::bind_cols(ts$time_series[[1]]["Index"], ts_cloud)
+
+        ts$cloud <- list(ts_cloud)
+    }
+
     # now we have to transpose the data
     ts_samples <- ts_bands %>%
         purrr::set_names(bands_sits) %>%
@@ -905,21 +915,23 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
 
     ts_samples <- dplyr::bind_cols(ts$time_series[[1]]["Index"], ts_samples)
 
-    ts$time_series[[1]] <- ts_samples
+    ts$time_series <- list(ts_samples)
 
     # change the class of the data
     # before - class "wtss"
     # now - class "sits"
     if (!purrr::is_null(ts)) {
+
         class(ts) <- setdiff(class(ts), "wtss")
         class(ts) <- c("sits", class(ts))
+
         # add a label column
         if (label != "NoClass") {
             ts$label <- label
         }
+
         # convert name
         ts <- .sits_tibble_rename(ts)
-        # band names are uppercase in SITS
     }
 
     # return the tibble with the time series

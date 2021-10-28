@@ -338,8 +338,10 @@
 
             cld_values <- as.matrix(cld_values)
             cld_rows <- nrow(cld_values)
-            cld_values <- matrix(bitwAnd(cld_values, sum(2 ^ cld_index)),
-                                 nrow = cld_rows)
+            cld_values <- (matrix(bitwAnd(cld_values, sum(2 ^ cld_index)),
+                                 nrow = cld_rows) > 0)
+        } else {
+            cld_values <- cld_values %in% cld_index
         }
     }
 
@@ -375,24 +377,24 @@
                                 use.names = FALSE)
 
             # include information from cloud band
+            cld_values <- NULL
             if (!purrr::is_null(cld_band)) {
                 cld_values <- unlist(cld_values[i, start_idx:end_idx],
                                      use.names = FALSE)
-                if (.source_cloud_bit_mask(
-                    source = .cube_source(cube = cube),
-                    collection = .cube_collection(cube = cube)))
-                    values_ts[cld_values > 0] <- NA
-                else
-                    values_ts[cld_values %in% cld_index] <- NA
+
+                if (!purrr::is_null(impute_fn))
+                    values_ts[cld_values] <- NA
             }
 
             # adjust maximum and minimum values
-            values_ts[values_ts == missing_value] <- NA
-            values_ts[values_ts < minimum_value] <- NA
-            values_ts[values_ts > maximum_value] <- NA
+            if (!purrr::is_null(impute_fn)) {
+                values_ts[values_ts == missing_value] <- NA
+                values_ts[values_ts < minimum_value] <- NA
+                values_ts[values_ts > maximum_value] <- NA
+            }
 
             # are there NA values? interpolate them
-            if (any(is.na(values_ts))) {
+            if (!purrr::is_null(impute_fn) && any(is.na(values_ts))) {
                 values_ts <- impute_fn(values_ts)
             }
 
@@ -400,22 +402,39 @@
             values_ts <- values_ts * scale_factor + offset_value
 
             # return the values of one band for point xy
-            return(values_ts)
+            return(list(bands = values_ts, cloud = cld_values))
         })
 
         # return the values of all points xy for one band
         return(ts_band_lst)
     }, progress = FALSE)
 
+    # create cloud column
+    if (!purrr::is_null(cld_band)) {
+
+        # now we have to transpose the data
+        ts_cloud <- purrr::map(ts_bands, function(band) {
+            purrr::map(band, function(x) x$cloud)
+        }) %>%
+            purrr::set_names(.source_cloud()) %>%
+            purrr::transpose() %>%
+            purrr::map(tibble::as_tibble)
+
+        samples$cloud <- purrr::map2(samples$time_series,
+                                     ts_cloud,
+                                     dplyr::bind_cols)
+    }
 
     # now we have to transpose the data
-    ts_samples <- ts_bands %>%
+    ts_bands <- purrr::map(ts_bands, function(band) {
+        purrr::map(band, function(x) x$bands)
+    }) %>%
         purrr::set_names(bands) %>%
         purrr::transpose() %>%
         purrr::map(tibble::as_tibble)
 
     samples$time_series <- purrr::map2(samples$time_series,
-                                       ts_samples,
+                                       ts_bands,
                                        dplyr::bind_cols)
 
     class(samples) <- c("sits", class(samples))
