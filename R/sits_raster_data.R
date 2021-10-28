@@ -245,10 +245,9 @@
         msg = "need a valid metadata for data cube"
     )
 
-    names <- c("longitude", "latitude", "label")
-    .check_chr_within(
-        x = names,
-        within = colnames(points),
+    .check_chr_contains(
+        x = names(points),
+        contains = c("longitude", "latitude", "label"),
         msg = "data input is not valid"
     )
 
