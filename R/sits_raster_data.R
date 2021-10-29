@@ -316,6 +316,7 @@
     colnames(xy) <- c("X", "Y")
 
     # retrieve values for the cloud band (if available)
+    cld_values <- NULL
     if (!purrr::is_null(cld_band)) {
 
         # retrieve values that indicate clouds
@@ -331,17 +332,18 @@
             xy = xy
         )
 
+        cld_values <- unname(as.matrix(cld_values))
+
         # get information about cloud bitmask
         if (.source_cloud_bit_mask(
             source = .cube_source(cube = cube),
             collection = .cube_collection(cube = cube))) {
 
-            cld_values <- as.matrix(cld_values)
-            cld_rows <- nrow(cld_values)
-            cld_values <- (matrix(bitwAnd(cld_values, sum(2 ^ cld_index)),
-                                 nrow = cld_rows) > 0)
+            cld_values <- (matrix(bitwAnd(cld_values, sum(2^cld_index)),
+                                 nrow = nrow(cld_values)) > 0)
         } else {
-            cld_values <- cld_values %in% cld_index
+            cld_values <- matrix(cld_values %in% cld_index,
+                                 nrow = nrow(cld_values))
         }
     }
 
@@ -377,7 +379,6 @@
                                 use.names = FALSE)
 
             # include information from cloud band
-            cld_values <- NULL
             if (!purrr::is_null(cld_band)) {
                 cld_values <- unlist(cld_values[i, start_idx:end_idx],
                                      use.names = FALSE)
@@ -402,7 +403,7 @@
             values_ts <- values_ts * scale_factor + offset_value
 
             # return the values of one band for point xy
-            return(list(bands = values_ts, cloud = cld_values))
+            return(list(band = values_ts, cloud = cld_values))
         })
 
         # return the values of all points xy for one band
@@ -413,12 +414,10 @@
     if (!purrr::is_null(cld_band)) {
 
         # now we have to transpose the data
-        ts_cloud <- purrr::map(ts_bands, function(band) {
-            purrr::map(band, function(x) x$cloud)
-        }) %>%
-            purrr::set_names(.source_cloud()) %>%
-            purrr::transpose() %>%
-            purrr::map(tibble::as_tibble)
+        ts_cloud <- purrr::map(ts_bands[[1]], function(x) {
+            tibble::as_tibble(purrr::set_names(x = list(x$cloud),
+                                               nm = .source_cloud()))
+        })
 
         samples$cloud <- purrr::map2(samples$time_series,
                                      ts_cloud,
@@ -427,7 +426,7 @@
 
     # now we have to transpose the data
     ts_bands <- purrr::map(ts_bands, function(band) {
-        purrr::map(band, function(x) x$bands)
+        purrr::map(band, function(x) x$band)
     }) %>%
         purrr::set_names(bands) %>%
         purrr::transpose() %>%
