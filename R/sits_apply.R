@@ -43,7 +43,9 @@ sits_apply <- function(data, ...) {
     return(value)
 }
 
-.apply.raster_cube <- function(data, ..., output_dir = ".") {
+.apply.raster_cube <- function(data,
+                               resolution, ...,
+                               output_dir = ".") {
 
     # pre-condition
     .check_that(inherits(data, "raster_cube"),
