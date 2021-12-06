@@ -11,6 +11,17 @@
     }
 }
 
+#' @title Return the number of active workers
+#' @name .sits_parallel_workers
+#' @keywords internal
+#' @author Rolf Simoes, \email{rolf.simoes@@inpe.br}
+.sits_parallel_workers <- function() {
+
+    if (purrr::is_null(sits_env$cluster))
+        return(0)
+    return(length(sits_env$cluster))
+}
+
 #' @title Start a new sits cluster for parallel processing
 #' @name .sits_parallel_start
 #' @keywords internal
@@ -20,8 +31,7 @@
 #' @param log       a logical indicating if log files must be written
 .sits_parallel_start <- function(workers, log) {
 
-    if (purrr::is_null(sits_env$cluster) ||
-        length(sits_env$cluster) != workers) {
+    if (.sits_parallel_workers() != workers) {
 
         .sits_parallel_stop()
 

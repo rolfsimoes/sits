@@ -73,8 +73,8 @@
 
 #' @keywords internal
 #' @export
-.raster_read_rast.terra <- function(file,
-                                    block = NULL, ...) {
+.raster_read_rast.terra <- function(file, ...,
+                                    block = NULL) {
 
     return(.raster_read_stack.terra(files = file,
                                     block = block))
@@ -150,8 +150,8 @@
 
 #' @keywords internal
 #' @export
-.raster_read_stack.terra <- function(files,
-                                     block = NULL, ...) {
+.raster_read_stack.terra <- function(files, ...,
+                                     block = NULL) {
 
     # create raster objects
     r_obj <- .raster_open_stack.terra(files = files, ...)

@@ -2,6 +2,8 @@
 
 S3method("sits_labels<-",probs_cube)
 S3method("sits_labels<-",sits)
+S3method(.apply,list)
+S3method(.apply,sits)
 S3method(.raster_check_package,default)
 S3method(.raster_check_package,raster)
 S3method(.raster_check_package,terra)

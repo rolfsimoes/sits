@@ -228,8 +228,8 @@
 #' @param ...     additional parameters to be passed to raster package
 #'
 #' @return numeric matrix
-.raster_read_rast <- function(file,
-                              block = NULL, ...) {
+.raster_read_rast <- function(file, ...,
+                              block = NULL) {
 
     # set caller to show in errors
     .check_set_caller(".raster_read_rast")
@@ -349,8 +349,8 @@
 #' @param ...     additional parameters to be passed to raster package
 #'
 #' @return numeric matrix
-.raster_read_stack <- function(files,
-                               block = NULL, ...) {
+.raster_read_stack <- function(files, ...,
+                               block = NULL) {
 
     # check block
     if (!purrr::is_null(block)) {

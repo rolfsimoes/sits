@@ -72,8 +72,8 @@
 
 #' @keywords internal
 #' @export
-.raster_read_rast.raster <- function(file,
-                                     block = NULL, ...) {
+.raster_read_rast.raster <- function(file, ...,
+                                     block = NULL) {
 
     return(.raster_read_stack.raster(files = file,
                                      block = block))
@@ -148,8 +148,8 @@
 }
 
 #' @export
-.raster_read_stack.raster <- function(files,
-                                      block = NULL, ...) {
+.raster_read_stack.raster <- function(files, ...,
+                                      block = NULL) {
 
     # create raster objects
     r_obj <- .raster_open_stack.raster(files = files, ...)
