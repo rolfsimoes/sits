@@ -50,6 +50,9 @@ sits_apply <- function(data, ...) {
                 local_msg = "value is not a valid sits tibble",
                 msg = "invalid 'data' value")
 
+    .check_that(.cube_is_regular(data),
+                msg = "cube is not regular")
+
     # slide through tiles
     if (nrow(data) > 1)
         slider::slide_dfr(data, .apply.raster_cube)
