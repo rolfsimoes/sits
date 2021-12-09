@@ -4,14 +4,14 @@
 \alias{.raster_read_stack}
 \title{Raster package internal read raster stack file function}
 \usage{
-.raster_read_stack(files, block = NULL, ...)
+.raster_read_stack(files, ..., block = NULL)
 }
 \arguments{
 \item{files}{raster files to be read}
 
-\item{block}{numeric vector with names "first_col", "ncols", "first_row", "nrows".}
-
 \item{...}{additional parameters to be passed to raster package}
+
+\item{block}{numeric vector with names "first_col", "ncols", "first_row", "nrows".}
 }
 \value{
 numeric matrix

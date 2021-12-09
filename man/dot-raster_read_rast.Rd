@@ -5,7 +5,7 @@
 \alias{.raster_write_rast}
 \title{Raster package internal read raster file function}
 \usage{
-.raster_read_rast(file, block = NULL, ...)
+.raster_read_rast(file, ..., block = NULL)
 
 .raster_write_rast(
   r_obj,
@@ -20,9 +20,9 @@
 \arguments{
 \item{file}{file path to save raster file}
 
-\item{block}{numeric vector with names "first_col", "ncols", "first_row", "nrows".}
-
 \item{...}{additional parameters to be passed to raster package}
+
+\item{block}{numeric vector with names "first_col", "ncols", "first_row", "nrows".}
 
 \item{r_obj}{raster package object to be written}
 
