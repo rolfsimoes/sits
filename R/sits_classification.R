@@ -28,7 +28,7 @@
 #' @param  data              data cube
 #' @param  ml_model          R model trained by \code{\link[sits]{sits_train}}.
 #' @param  ...               other parameters to be passed to specific functions
-#' @param  roi               a region of interest (see above)
+#' @param  roi               a region of interest (see below)
 #' @param  filter_fn         smoothing filter to be applied (if desired).
 #' @param  impute_fn         impute function to replace NA
 #' @param  start_date        starting date for the classification
@@ -63,7 +63,8 @@
 #'    The "memsize" and "multicores" parameters are used for multiprocessing.
 #'    The "multicores" parameter defines the number of cores used for
 #'    processing. The "memsize" parameter  controls the amount of memory
-#'    available for classification.
+#'    available for classification. We recommend using a 4:1 relation between
+#'    "memsize" and "multicores".
 #'
 #' @examples
 #' \donttest{
@@ -71,13 +72,13 @@
 #' # Retrieve the samples for Mato Grosso
 #' # select an extreme gradient boosting model
 #' samples_2bands <- sits_select(samples_modis_4bands,
-#'                             bands = c("NDVI", "EVI"))
+#'                             bands = c("EVI", "NDVI"))
 #' xgb_model <- sits_train(samples_2bands,
 #'     ml_method = sits_xgboost(verbose = FALSE)
 #' )
 #' # classify the point
 #' point_2bands <- sits_select(point_mt_6bands,
-#'                             bands = c("NDVI", "EVI"))
+#'                             bands = c("EVI", "NDVI"))
 #' point_class <- sits_classify(point_2bands, xgb_model)
 #' plot(point_class)
 #'
@@ -135,13 +136,13 @@ sits_classify.sits <- function(data,
 
     # Precondition: only savitsky-golay and whittaker filters are supported
     if (!purrr::is_null(filter_fn)) {
-        call_names <- deparse(sys.call())
-        .check_that(
-            x = any(grepl("sgolay", (call_names))) ||
-                any(grepl("whittaker", (call_names))),
-            msg = "only savitsky-golay and whittaker filters are supported"
-        )
-        data <- filter_fn(data)
+        # call_names <- deparse(sys.call())
+        # .check_that(
+        #     x = any(grepl("sgolay", (call_names))) ||
+        #         any(grepl("whittaker", (call_names))),
+        #     msg = "only savitsky-golay and whittaker filters are supported"
+        # )
+        data <- .apply_across(data, fn = filter_fn)
     }
 
     # precondition - are the samples valid?
@@ -150,6 +151,11 @@ sits_classify.sits <- function(data,
         x = nrow(samples) > 0,
         msg = "missing original samples"
     )
+    # check band order is the same
+    bands_samples <- sits_bands(samples)
+    bands_data <- sits_bands(data)
+    .check_that(all(bands_samples == bands_data),
+                msg = "Order of the bands must be the same in samples and in data")
 
     # get normalization params
     stats <- environment(ml_model)$stats
@@ -271,7 +277,7 @@ sits_classify.raster_cube <- function(data, ml_model, ...,
             )
         }
 
-        # temporary fix
+        # check
         n_samples <- length(sits_timeline(samples))
         n_tile <- length(sits_timeline(tile))
 

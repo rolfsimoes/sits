@@ -6,8 +6,8 @@
 \alias{.source_collection_access_test}
 \alias{.source_collection_access_vars_set}
 \alias{.source_collection_check}
-\alias{.source_collection_gdal_config}
-\alias{.source_collection_gdal_type}
+\alias{.source_collection_gdalcubes_type}
+\alias{.source_collection_gdalcubes_support}
 \alias{.source_collection_name}
 \alias{.source_collection_open_data}
 \alias{.source_collection_open_data_token}
@@ -17,15 +17,15 @@
 \usage{
 .source_collections(source, ...)
 
-.source_collection_access_test(source, ..., collection)
+.source_collection_access_test(source, collection, ...)
 
 .source_collection_access_vars_set(source, collection)
 
 .source_collection_check(source, collection)
 
-.source_collection_gdal_config(source, collection)
+.source_collection_gdalcubes_type(source, collection)
 
-.source_collection_gdal_type(source, collection)
+.source_collection_gdalcubes_support(source, collection)
 
 .source_collection_name(source, collection)
 
@@ -57,7 +57,7 @@ no error occurs.
 \code{.source_collection_check()} returns \code{NULL} if
 no error occurs.
 
-\code{.source_collection_gdal_config()} returns the gdal format file path.
+\code{.source_collection_gdal_type()} returns the gdal type.
 
 \code{.source_collection_gdal_type()} returns the gdal type.
 
@@ -79,14 +79,14 @@ collections.
 
 \code{.source_collections()} lists all collections of a source.
 
-\code{.source_collection_access_vars_set} checks if
-\code{access_vars} environment variables are properly defined.
+\code{.source_collection_access_vars_set} sets
+\code{access_vars} environment variables.
 
 \code{.source_collection_check()} checks if a collection
 is from a source.
 
-\code{.source_collection_gdal_config()} checks if a collection
-has a gdalcubes format description.
+\code{.source_collection_gdal_type()} checks if a collection
+has a gdalcubes type for writing files.
 
 \code{.source_collection_gdal_type()} checks if a collection
 has a gdalcubes type for writing files.

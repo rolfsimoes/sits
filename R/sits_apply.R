@@ -1,333 +1,130 @@
-#
-#
-# data <- list(EVI = terra::rast(cbers_cube$file_info[[1]]$path[[1]]),
-#              NDVI = terra::rast(cbers_cube$file_info[[1]]$path[[2]]))
-#
-#
-# test <- function(bands, ...) {
-#
-#     used_bands <- character(0)
-#
-#     detect_bands <- lapply(bands, function(band) {
-#         quote({
-#             used_bands <<- c(used_bands, band)
-#             1
-#         })
-#     })
-#
-#     names(detect_bands) <- bands
-#
-#     expr <- substitute(list(...), env = environment())
-#
-#     return(eval(expr, envir = detect_bands))
-#
-#     return(used_bands)
-# }
-#
-# test(c("NDVI", "EVI", "B01"), TEST = NDVI * 2)
-
-
+#' @title Apply a function on a set of time series
+#'
+#' @name sits_apply
+#'
+#' @author Rolf Simoes, \email{rolf.simoes@@inpe.br}
+#' @author Felipe Carvalho, \email{felipe.carvalho@@inpe.br}
+#' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
+#'
+#' @description
+#' Apply a named expression to a sits cube or a sits tibble
+#' to be evaluated and generate new bands (indices). In the case of sits
+#' cubes, it materializes a new band in `output_dir` using `gdalcubes`.
+#'
+#' @param data          Valid sits tibble or cube
+#' @param output_dir    Directory where files will be saved.
+#' @param ...           Named expressions to be evaluated.
+#'
+#' @return A sits tibble or a sits cube with new bands.
+#'
+#' @examples
+#' # Get a time series
+#' # apply a normalization function
+#'
+#' point2 <-
+#'   sits_select(point_mt_6bands, "NDVI") %>%
+#'   sits_apply(NDVI_norm = (NDVI - min(NDVI)) / (max(NDVI) - min(NDVI))
+#' )
+#'
+#' @export
 sits_apply <- function(data, ...) {
 
-    expr <- substitute(list(...), env = environment())
-
-    .apply(data, expr = expr)
+    UseMethod("sits_apply", data)
 }
-
-
-.apply <- function(data, ...) {
-
-    .check_set_caller(".apply")
-
-    UseMethod(".apply", data)
-}
-
 #' @export
-.apply.list <- function(data, ...) {
+sits_apply.sits <- function(data, ...) {
 
-    # pre-condition
-    .check_lst(data, min_len = 1, msg = "invalid 'data' value")
+    .check_set_caller("sits_apply.sits")
 
-    # capture expression
-    expr <- substitute(list(...), env = environment())
-
-    # evaluate
-    value <- .check_error({
-        eval(expr, envir = data)
-    }, msg = "evaluation error")
-
-    return(value)
+    .sits_fast_apply(data, col = "time_series", fn = dplyr::mutate, ...)
 }
-
+#'
 #' @export
-.apply.sits <- function(data, ...) {
+sits_apply.raster_cube <- function(data, ..., output_dir = getwd()) {
 
-    # pre-condition
-    .check_that(inherits(data, "sits"),
-                local_msg = "value is not a valid sits tibble",
-                msg = "invalid 'data' value")
+    .check_set_caller("sits_apply.raster_cube")
 
-    .local_mutate <- function(x)
-        tibble::as_tibble(c(x, .apply.list(x, ...)))
+    toi <- .gc_get_valid_interval(data)
 
-    value <- .sits_fast_apply(data, col = "time_series", .local_mutate)
+    ic <- .gc_create_database(data, path_db = tempfile(fileext = ".db"))
 
-    return(value)
-}
+    # capture dots as a list of quoted expressions
+    list_expr <- lapply(substitute(list(...), env = environment()),
+                        unlist, recursive = F)[-1]
 
-.apply.raster_cube <- function(data,
-                               bbox,
-                               res, ...,
-                               output_dir = ".",
-                               res_method = "bilinear") {
+    bands <- names(list_expr)
 
-    # pre-condition
-    .check_that(inherits(data, "raster_cube"),
-                local_msg = "value is not a valid sits tibble",
-                msg = "invalid 'data' value")
+    .check_that(length(bands) == length(list_expr),
+                local_msg = "not all expressions have names",
+                msg = "invalid expressions parameters")
 
-    .check_that(.cube_is_regular(data),
-                msg = "cube is not regular")
+    result <- slider::slide_dfr(data, function(tile) {
 
-    # slide through tiles
-    if (nrow(data) > 1)
-        slider::slide_dfr(data, .apply.raster_cube, bbox = bbox,
-                          resolution = res, output_dir = output_dir)
+        cv <- .gc_create_cube_view(
+            tile = tile,
+            period = tile[["period"]],
+            res = .cube_resolution(tile),
+            roi = NULL,
+            toi = toi,
+            agg_method = "first",
+            resampling = "bilinear"
+        )
 
-    # traverse each scene
-    # parallel processing
-    .sits_parallel_map(sits_timeline(data), function(date) {
+        rc <- gdalcubes::raster_cube(ic, view = cv)
 
-        # pull file_info // data has one row at this point
-        file_info <- .cube_file_info(data)
+        output_files <- purrr::map(bands, function(band) {
 
-        # change this to "fid"
-        item <- dplyr::filter(file_info, .data[["date"]] == !!date)
+            cc <- gdalcubes::apply_pixel(rc,
+                                         expr = deparse(list_expr[[band]]),
+                                         names = band)
 
-        # create blocks to be processed
-        # TODO: get block size from config file
-        blocks <- .bbox_split(bbox, ylen = 1024 * res)
-
-        # capture expression
-        expr <- substitute(list(...), env = environment())
-
-        # for each block
-        output_blocks <- purrr::map(blocks, function(block) {
-
-            # download rasters of each band
-            local_block_bands <- purrr::map(item[["bands"]], function(band) {
-
-                # filter band
-                item_band <- dplyr::filter(item, .data[["band"]] == !!band)
-
-                # create a local file path
-                block_path <- .local_block_path(path = item_band[["path"]],
-                                                block = block)
-
-                # skip if file exists
-                if (file.exists(block_path))
-                    return(block_path)
-
-                # download the image to local path
-                gdalUtilities::gdalwarp(
-                    srcfile = path,
-                    dstfile = block_path,
-                    of = "GTiff",
-                    te = bbox[c("xmin", "ymin", "xmax", "ymax")],
-                    tr = res[c("xres", "yres")],
-                    r = res_method)
-
-                # return parallel class error to try again
-                # if (!file.exists(block_path))
-                #     return()
-
-                block_path
-            })
-
-            # read local files
-            bands <- purrr::map(local_paths, function(path) {
-
-                .raster_read_rast(file = path)
-            })
-
-            # set band names
-            names(bands) <- item[["band"]]
-
-            # process
-            results <- .apply(bands, ...)
-
-            # save results
-
-            # output file
-            output_block_file
+            gdalcubes::write_tif(
+                cc,
+                dir = output_dir,
+                prefix = paste("cube", tile[["tile"]], band, "", sep = "_"),
+                creation_options = list("COMPRESS" = "LZW", "BIGTIFF" = "YES"),
+                pack = list(type = "int16", nodata = -9999, scale = 1,
+                            offset = 0)
+            )
         })
 
-        merged_file <- gdalUtilities::gdalwarp(srcfile = output_block_files,
-                                               dstfile = output_files)
-
-        # produce each output file
-        output_files <- purrr::map(output_files, function(output_file) {
-
-
+        # retrieve dates
+        dates <- purrr::map(output_files, function(x) {
+            dplyr::tibble(date = .gc_get_date(x))
         })
 
-        item
-    }, progress = TRUE)
-}
+        output_files <- purrr::map(output_files, function(x) {
+            dplyr::tibble(path = x)
+        })
 
+        file_info <- tidyr::unnest(tibble::tibble(
+            date = dates,
+            band = bands,
+            res = .cube_resolution(tile),
+            path = output_files
+        ), cols = c("date", "path"))
 
-# generate a local file path based on input path
-.bbox_local_path <- function(path, bbox, output_dir) {
+        tile[["file_info"]][[1]] <-
+            dplyr::bind_rows(tile[["file_info"]][[1]],
+                             file_info) %>%
+            dplyr::arrange(date, band)
 
-    path <- gsub("^([^?]+)\\?.*$", "\\1", path)
-    file <- gsub("^.*/(.*)$", "\\1", path)
-    file_name <- gsub("^(.*)\\..+$", "\\1", file)
-    file_ext <- gsub("^.*\\.(.+)$", "\\1", file)
-    if (!is.null(bbox))
-        file_name <- paste(file_name, paste(bbox, collapse = "_"),
-                           sep = "_")
-    paste(output_dir, paste(file_name, file_ext, sep = "."), sep = "/")
-}
-
-.bbox_split <- function(bbox, ...,
-                        xlen = NULL,
-                        ylen = NULL) {
-
-    .check_num(bbox, len_min = 4, len_max = 4, is_named = TRUE,
-               msg = "invalid 'bbox' parameter")
-
-    .check_chr_contains(names(bbox),
-                        contains = c("xmin", "xmax", "ymin", "ymax"),
-                        msg = "invalid 'bbox' parameter")
-
-    if (is.null(xlen))
-        xlen <- bbox[["xmax"]] - bbox[["xmin"]]
-
-    if (is.null(ylen))
-        ylen <- bbox[["ymax"]] - bbox[["ymin"]]
-
-    xsplits <- unique(c(seq(from = bbox[["xmin"]],
-                            to = bbox[["xmax"]], by = xlen),
-                        bbox[["xmax"]]))
-
-    ysplits <- unique(c(seq(from = bbox[["ymin"]],
-                            to = bbox[["ymax"]], by = ylen),
-                        bbox[["ymax"]]))
-
-    splits <- purrr::map_dfr(seq_len(length(xsplits) - 1), function(i) {
-        dplyr::tibble(xmin = xsplits[[i]],
-                      xmax = xsplits[[i + 1]],
-                      ymin = ysplits[seq_len(length(ysplits) - 1)],
-                      ymax = ysplits[-1])
+        tile
     })
 
-    slider::slide(splits, unlist)
-}
-
-.raster_resample <- function(path, ...,
-                             bbox = NULL,
-                             res = NULL,
-                             res_method = "bilinear",
-                             data_type = "INT2S",
-                             output_dir = ".") {
-
-    .check_set_caller(".raster_resample")
-
-    if (!is.null(bbox)) {
-
-        .check_num(bbox, len_min = 4, len_max = 4, is_named = TRUE,
-                   msg = "invalid 'bbox' parameter")
-
-        .check_chr_contains(names(bbox),
-                            contains = c("xmin", "xmax", "ymin", "ymax"),
-                            msg = "invalid 'bbox' parameter")
-
-        bbox <- bbox[c("xmin", "xmax", "ymin", "ymax")]
-    }
-
-    if (!is.null(res)) {
-
-        .check_num(res, len_min = 2, len_max = 2, is_named = TRUE,
-                   msg = "invalid 'res' parameter")
-
-        .check_chr_contains(names(res),
-                            contains = c("xres", "yres"),
-                            msg = "invalid 'res' parameter")
-
-        res <- res[c("xres", "yres")]
-    }
-
-    .check_chr(res_method, len_min = 1, len_max = 1,
-               msg = "invalid 'res_method' parameter")
-
-    .check_chr_within(res_method, within = c("bilinear", "near"))
-
-    .check_chr(output_dir, len_min = 1, len_max = 1,
-               msg = "invalid 'output_dir' parameter")
-
-    .check_that(dir.exists(output_dir),
-                local_msg = "directory does not exist",
-                msg = "invalid 'output_dir' parameter")
-
-    # create a local file path
-    block_path <- .bbox_local_path(path = path,
-                                   bbox = bbox,
-                                   output_dir = output_dir)
-
-    # skip if file exists
-    if (file.exists(block_path))
-        return(block_path)
-
-    # open original raster
-    r_src <- terra::rast(path)
-
-    # open destination raster
-    if (is.null(bbox) && is.null(res))
-        r_dst <- terra::rast(r_src)
-    else if (is.null(bbox))
-        r_dst <- terra::rast(crs = terra::crs(r_src),
-                             extent = terra::ext(r_src),
-                             resolution = res)
-    else if (is.null(res))
-        r_dst <- terra::rast(crs = terra::crs(r_src),
-                             extent = terra::ext(bbox),
-                             resolution = terra::res(r_src))
-    else
-        r_dst <- r_dst <- terra::rast(crs = terra::crs(r_src),
-                                      extent = terra::ext(bbox),
-                                      resolution = res)
-
-    # resample original into destination raster
-    terra::resample(r_src, r_dst, method = res_method,
-                    filename = block_path,
-                    gdal = .config_gtiff_default_options(),
-                    datatype = data_type)
-
-    # return parallel class error to try again
-    .check_file(block_path, msg = "post-condition error")
-
-    return(r_dst)
-}
-
-
-.mutate.matrix <- function(data, ...) {
-
-    .check_set_caller(".mutate")
-
-    # pre-condition
-    .check_that(is.matrix(data),
-                local_msg = "data is not matrix",
-                msg = "invalid data value")
-
-    result <- apply(data, MARGIN = 2, FUN = fn, ...)
-
-    # post-condition
-    .check_that(identical(dim(result), dim(data)),
-                local_msg = paste("result value dimension should be",
-                                  paste(dim(data), collapse = "x"),
-                                  "instead of",
-                                  paste(dim(result), collapse = "x")),
-                msg = "invalid result dimension")
-
     return(result)
+}
+
+#' @title Apply a function to a set of time series
+#' @name .apply_across
+#' @keywords internal
+.apply_across <- function(data, fn, ...) {
+
+    .check_set_caller(".apply_across")
+
+    fn_across <- fn
+    .sits_fast_apply(data, col = "time_series", fn = function(x, ...) {
+        dplyr::mutate(x, dplyr::across(dplyr::matches(sits_bands(data)),
+                                       fn_across, ...))
+    }, ...)
 }

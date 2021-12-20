@@ -50,7 +50,11 @@ test_that("One-year, single core classification", {
 test_that("One-year, multicore classification", {
 
     samples_2bands <- sits_select(samples_modis_4bands,
-                                  bands = c("NDVI", "EVI"))
+                                  bands = c("EVI", "NDVI"))
+
+    timeline_samples <- sits_timeline(samples_2bands)
+    start_date <- timeline_samples[1]
+    end_date <- timeline_samples[length(timeline_samples)]
 
     svm_model <- sits_train(samples_2bands, sits_svm())
 
@@ -68,9 +72,32 @@ test_that("One-year, multicore classification", {
             sits_classify(
                 data = sinop,
                 ml_model = svm_model,
+                start_date = start_date,
+                end_date = end_date,
                 output_dir = tempdir(),
                 memsize = 4,
-                multicores = 2
+                multicores = 2,
+                verbose = TRUE
+            )
+        )
+    },
+    error = function(e) {
+        return(NULL)
+    })
+    if (purrr::is_null(sinop_probs)) {
+        skip("Unable to allocate multicores")
+    }
+    sinop_probs <- tryCatch({
+        suppressMessages(
+            sits_classify(
+                data = sinop,
+                ml_model = svm_model,
+                start_date = start_date,
+                end_date = end_date,
+                output_dir = tempdir(),
+                memsize = 4,
+                multicores = 2,
+                verbose = TRUE
             )
         )
     },
@@ -78,27 +105,26 @@ test_that("One-year, multicore classification", {
         return(NULL)
     })
 
-    if (purrr::is_null(sinop_probs)) {
-        skip("Unable to allocate multicores")
-    }
-
     expect_true(all(file.exists(unlist(sinop_probs$file_info[[1]]$path))))
-    r_obj <- .raster_open_rast(sinop_probs$file_info[[1]]$path[[1]])
-    expect_true(.raster_nrows(r_obj) == .cube_size(sinop_probs)[["nrows"]])
+    r_obj <- sits:::.raster_open_rast(sinop_probs$file_info[[1]]$path[[1]])
+    expect_true(sits:::.raster_nrows(r_obj) == sits:::.cube_size(sinop_probs)[["nrows"]])
 
-    max_lyr2 <- max(.raster_get_values(r_obj)[, 2])
+    max_lyr2 <- max(sits:::.raster_get_values(r_obj)[, 2])
     expect_true(max_lyr2 <= 10000)
 
-    max_lyr3 <- max(.raster_get_values(r_obj)[, 3])
+    max_lyr3 <- max(sits:::.raster_get_values(r_obj)[, 3])
     expect_true(max_lyr3 <= 10000)
 
     expect_true(all(file.remove(unlist(sinop_probs$file_info[[1]]$path))))
 })
 
 test_that("One-year, single core classification with filter", {
-    samples_2bands <- sits_select(samples_modis_4bands,
-                                  bands = c("NDVI", "EVI"))
-    samples_filt <- sits_whittaker(samples_2bands, bands_suffix = "")
+
+    sits:::.sits_debug(flag = TRUE)
+    samples_filt <-
+        sits_select(samples_modis_4bands, bands = c("EVI", "NDVI")) %>%
+        sits_filter(filter = sits_whittaker())
+
     svm_model <- sits_train(samples_filt, sits_svm())
 
     data_dir <- system.file("extdata/raster/mod13q1", package = "sits")
@@ -123,12 +149,16 @@ test_that("One-year, single core classification with filter", {
 
     expect_true(all(file.exists(unlist(sinop_probs$file_info[[1]]$path))))
     expect_true(all(file.remove(unlist(sinop_probs$file_info[[1]]$path))))
+    sits:::.sits_debug(flag = FALSE)
 })
 
 test_that("One-year, multicore classification with filter", {
-    samples_2bands <- sits_select(samples_modis_4bands,
-                                  bands = c("NDVI", "EVI"))
-    samples_filt <- sits_whittaker(samples_2bands, bands_suffix = "")
+
+    samples_filt <-
+        sits_select(samples_modis_4bands, bands = c("NDVI", "EVI")) %>%
+        sits_apply(NDVI = sits_whittaker(NDVI, lambda = 0.5),
+                   EVI = sits_whittaker(EVI, lambda = 0.5))
+
     rfor_model <- sits_train(samples_filt, sits_rfor())
 
     data_dir <- system.file("extdata/raster/mod13q1", package = "sits")

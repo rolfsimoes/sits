@@ -18,9 +18,7 @@ test_that("Align dates", {
 test_that("Apply", {
     point_ndvi <- sits_select(point_mt_6bands, bands = "NDVI")
     point2 <- sits_apply(point_ndvi,
-        fun = function(x) {
-            (x - min(x)) / (max(x) - min(x))
-        }
+                         NDVI = (NDVI - min(NDVI)) / (max(NDVI) - min(NDVI))
     )
 
     expect_equal(sum((sits_time_series(point2))$NDVI),
@@ -37,22 +35,21 @@ test_that("Bands", {
     expect_equal(bands[1], "NDVI")
 })
 
+test_that("Bbox", {
+    bbox <- sits_bbox(samples_modis_4bands)
+    expect_true(all(names(bbox_ll) %in%
+                        c("lon_min", "lat_min", "lon_max", "lat_max")))
+    expect_true(bbox["lon_min"] < -60.0)
+
+
+})
 test_that("Merge", {
     point_ndvi <- sits_select(point_mt_6bands, bands = "NDVI")
-    point_ws <- sits_whittaker(point_ndvi, lambda = 3.0)
-    result <- sits_merge(point_ndvi, point_ws)
+    point_evi <- sits_select(point_mt_6bands, bands = "EVI")
+    result <- sits_merge(point_ndvi, point_evi)
 
     expect_true(length(sits_timeline(result)) == 412)
     expect_true(ncol(sits_time_series(result)) == 3)
-})
-
-test_that("Mutate", {
-    ndwi <- sits_mutate_bands(samples_modis_4bands,
-                              NDWI = (1.5) * (NIR - MIR) / (NIR + MIR))
-    expect_equal(sum(sits_time_series(ndwi)$NDWI),
-                 14.22552,
-                 tolerance = 0.001
-    )
 })
 
 test_that("Prune", {

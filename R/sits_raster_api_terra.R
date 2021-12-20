@@ -283,9 +283,7 @@
 #' @export
 .raster_extent.terra <- function(r_obj, ...) {
 
-    suppressWarnings(
-        as.vector(terra::ext(x = r_obj))
-    )
+    suppressWarnings(as.vector(terra::ext(x = r_obj)))
 }
 
 #' @keywords internal
@@ -293,31 +291,6 @@
 .raster_freq.terra <- function(r_obj, ...) {
 
     terra::freq(x = r_obj, bylayer = TRUE)
-}
-
-#' @keywords internal
-#' @export
-.raster_focal.terra <- function(r_obj,
-                                window_size,
-                                fn, ...) {
-
-    # check fun parameter
-    if (is.character(fn)) {
-
-        if (fn == "modal")
-            fn <- terra::modal
-    }
-
-    suppressWarnings(
-        terra::focal(
-            x   = r_obj,
-            w   = window_size,
-            fun = fn,
-            na.rm = TRUE,
-            fillvalue = NA,
-            expand = TRUE, ...
-        )
-    )
 }
 
 #' @keywords internal
