@@ -40,6 +40,11 @@ local_file_extensions   : ["tiff", "tif", "jp2", "hdf", "vrt"]
 probs_cube_scale_factor : 0.0001
 probs_cube_data_type    : "INT2U"
 
+# configuration for probability cubes
+raster_cube_scale_factor : 0.0001
+raster_cube_offset_value : 0
+raster_cube_data_type    : "INT2S"
+
 # configuration for classified cubes
 class_cube_data_type    : "INT1U"
 
