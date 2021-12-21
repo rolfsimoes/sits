@@ -97,7 +97,7 @@ sits_whittaker <- function(data = NULL, lambda = 0.5) {
     filter_fun <- function(data) {
         if (inherits(data, "matrix")) {
             return(t(apply(data, 1, smooth_whit, lambda = lambda,
-                         length = ncol(data))))
+                           length = ncol(data))))
         } else {
             return(smooth_whit(data, lambda = lambda, length = length(data)))
         }

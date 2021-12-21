@@ -198,7 +198,7 @@ sits_apply.raster_cube <- function(data, ...,
         tile[["file_info"]][[1]] <-
             dplyr::bind_rows(tile[["file_info"]][[1]],
                              file_info) %>%
-            dplyr::arrange(date, band)
+            dplyr::arrange(date, .data[["band"]])
 
         tile
     })

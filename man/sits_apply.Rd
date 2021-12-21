@@ -11,7 +11,7 @@ sits_apply(data, ...)
 
 \method{sits_apply}{sits}(data, ...)
 
-\method{sits_apply}{raster_cube}(data, ..., output_dir = getwd())
+\method{sits_apply}{raster_cube}(data, ..., impute_fn = sits_impute_linear(), output_dir = getwd())
 
 .apply_across(data, fn, ...)
 
@@ -19,7 +19,7 @@ sits_apply(data, ...)
 
 \method{sits_apply}{sits}(data, ...)
 
-\method{sits_apply}{raster_cube}(data, ..., output_dir = getwd())
+\method{sits_apply}{raster_cube}(data, ..., impute_fn = sits_impute_linear(), output_dir = getwd())
 
 .apply_across(data, fn, ...)
 }
