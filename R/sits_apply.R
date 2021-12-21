@@ -77,14 +77,14 @@ sits_apply.raster_cube <- function(data, ...,
     # traverse each tile
     result <- slider::slide_dfr(data, function(tile) {
 
-        # get file_info
-        in_file_info <- tile[["file_info"]][[1]]
+        # get file_info filtered by bands
+        in_file_info <- .file_info(tile, band == !!in_bands)
 
         # traverse each date in file info
-        out_file_info <- purrr::map_dfr(sits_timeline(tile), function(date) {
+        out_file_info <- .foreach_file_info(
+            in_file_info, group_by = "fid", order_by = "band",
+            fn = function(file_info_fid) {
 
-            # filter by date
-            in_file_info <- dplyr::filter(in_file_info, date == !!date)
 
             # filter file_info by date
             in_files <- dplyr::filter(in_file_info, band == !!in_bands) %>%
@@ -141,21 +141,22 @@ sits_apply.raster_cube <- function(data, ...,
                 if (file.exists(file_path))
                     return(file_path)
 
-                # new raster
-                r_obj <- .raster_new_rast(nrows = in_file_info[["nrows"]][[1]],
-                                          ncols = in_file_info[["ncols"]][[1]],
-                                          xmin = in_file_info[["xmin"]][[1]],
-                                          xmax = in_file_info[["xmax"]][[1]],
-                                          ymin = in_file_info[["ymin"]][[1]],
-                                          ymax = in_file_info[["ymax"]][[1]],
-                                          nlayers = 1,
-                                          crs = tile[["crs"]])
-
                 # evaluate expressions
                 # TODO: internal var: 'default_scale_factor'
                 out_values <- eval(list_expr[[band]], in_values) *
                     .config_get("raster_cube_scale_factor") +
                     .config_get("raster_cube_offset_value")
+
+                # new raster
+                r_obj <- .raster_new_rast(
+                    nrows = in_file_info[["nrows"]][[1]],
+                    ncols = in_file_info[["ncols"]][[1]],
+                    xmin = in_file_info[["xmin"]][[1]],
+                    xmax = in_file_info[["xmax"]][[1]],
+                    ymin = in_file_info[["ymin"]][[1]],
+                    ymax = in_file_info[["ymax"]][[1]],
+                    nlayers = 1,
+                    crs = tile[["crs"]])
 
                 # set values
                 r_obj <- .raster_set_values(r_obj, out_values)
@@ -175,7 +176,22 @@ sits_apply.raster_cube <- function(data, ...,
             # clean memory
             gc()
 
-            in_file_info
+            # prepare output file_info
+            out_file_info <- tibble::tibble(
+                fid = file_info[["fid"]][[1]],
+                date = file_info[["date"]][[1]],
+                band = bands,
+                xmin = file_info[["xmin"]][[1]],
+                xmax = file_info[["xmax"]][[1]],
+                ymin = file_info[["ymin"]][[1]],
+                ymax = file_info[["ymax"]][[1]],
+                xres = file_info[["xres"]][[1]],
+                yres = file_info[["yres"]][[1]],
+                nrows = file_info[["nrows"]][[1]],
+                ncols = file_info[["ncols"]][[1]],
+                path = output_files)
+
+            return(out_file_info)
         })
 
 
@@ -184,9 +200,9 @@ sits_apply.raster_cube <- function(data, ...,
             dplyr::tibble(date = .gc_get_date(x))
         })
 
-        output_files <- purrr::map(output_files, function(x) {
-            dplyr::tibble(path = x)
-        })
+            tile_fid[["file_info"]][[1]] <-
+                dplyr::filter(.cube_file_info(tile),
+                              .data[["fid"]] == !!fid)
 
         file_info <- tidyr::unnest(tibble::tibble(
             date = dates,
@@ -195,12 +211,78 @@ sits_apply.raster_cube <- function(data, ...,
             path = output_files
         ), cols = c("date", "path"))
 
-        tile[["file_info"]][[1]] <-
-            dplyr::bind_rows(tile[["file_info"]][[1]],
-                             file_info) %>%
-            dplyr::arrange(date, .data[["band"]])
+            ic <- .gc_create_database(tile_fid,
+                                      path_db = tempfile(fileext = ".db"))
 
-        tile
+            bands <- names(list_expr)
+
+            .check_that(length(bands) == length(list_expr),
+                        local_msg = "not all expressions have names",
+                        msg = "invalid expressions parameters")
+
+
+            cv <- .gc_create_cube_view(
+                tile = tile_fid,
+                period = "P1D",
+                res = .cube_resolution(tile_fid),
+                roi = NULL,
+                toi = toi,
+                agg_method = "first",
+                resampling = "bilinear"
+            )
+
+            rc <- gdalcubes::raster_cube(ic, view = cv)
+
+            output_files <- purrr::map(bands, function(band) {
+
+                cc <- gdalcubes::apply_pixel(rc,
+                                             expr = deparse(list_expr[[band]]),
+                                             names = band)
+
+                # file prefix
+                prefix <- paste("cube", tile_fid[["tile"]], band, "", sep = "_")
+
+                gdalcubes::write_tif(
+                    cc,
+                    dir = output_dir,
+                    prefix = prefix,
+                    creation_options = list("COMPRESS" = "LZW",
+                                            "BIGTIFF" = "YES"),
+                    pack = list(type = "int16", nodata = -9999,
+                                scale = 1, offset = 0)
+                )
+
+                file_name <- paste0(output_dir, "/", prefix,
+                                    .cube_file_info(tile_fid)[["date"]][[1]],
+                                    ".tif")
+                return(file_name)
+            })
+
+            file_info <- .cube_file_info(tile_fid)
+
+            file_info <- tidyr::unnest(tibble::tibble(
+                fid = file_info[["fid"]][[1]],
+                date = file_info[["date"]][[1]],
+                band = bands,
+                xmin = file_info[["xmin"]][[1]],
+                xmax = file_info[["xmax"]][[1]],
+                ymin = file_info[["ymin"]][[1]],
+                ymax = file_info[["ymax"]][[1]],
+                xres = file_info[["xres"]][[1]],
+                yres = file_info[["yres"]][[1]],
+                nrows = file_info[["nrows"]][[1]],
+                ncols = file_info[["ncols"]][[1]],
+                path = output_files
+            ), cols = c("date", "path"))
+
+            file_info_fid <- dplyr::bind_rows(tile_fid[["file_info"]][[1]],
+                                              file_info) %>%
+                dplyr::arrange(date, band)
+
+            return(file_info_fid)
+        })
+
+        return(tile)
     })
 
     return(result)
