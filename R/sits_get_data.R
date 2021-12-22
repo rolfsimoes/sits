@@ -706,7 +706,7 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
                             start_date = start_date,
                             end_date = end_date,
                             label = label,
-                            cube = cube$collection,
+                            cube = cube[["collection"]],
                             time_series = list(ts)
     )
     return(data)
@@ -773,7 +773,7 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
     # retrieve the time series from the service
     tryCatch({
         ts <- Rwtss::time_series(URL = cube$file_info[[1]]$path[[1]],
-                                 name = cube$collection,
+                                 name = cube[["collection"]],
                                  attributes = bands,
                                  longitude = longitude,
                                  latitude = latitude,
@@ -791,7 +791,7 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
 
     # interpolate clouds
     cld_band <- .source_bands_band_name(source = "WTSS",
-                                        collection = cube$collection,
+                                        collection = cube[["collection"]],
                                         bands = .source_cloud())
 
     # retrieve values for the cloud band (if available)
@@ -827,8 +827,8 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
         values_band <- ts$time_series[[1]][[band]]
 
         # convert to sits band
-        band_sits <- .source_bands_to_sits(source = cube$source[[1]],
-                                           collection = cube$collection[[1]],
+        band_sits <- .source_bands_to_sits(source = cube[["source"]][[1]],
+                                           collection = cube[["collection"]][[1]],
                                            bands = band)
 
         if (!purrr::is_null(impute_fn)) {
@@ -876,8 +876,8 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
     })
 
     # rename bands to sits band names
-    bands_sits <- .source_bands_to_sits(source = cube$source[[1]],
-                                        collection = cube$collection[[1]],
+    bands_sits <- .source_bands_to_sits(source = cube[["source"]][[1]],
+                                        collection = cube[["collection"]][[1]],
                                         bands = bands)
 
     # now we have to transpose the data

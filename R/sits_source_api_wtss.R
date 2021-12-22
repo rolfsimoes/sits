@@ -73,7 +73,8 @@
 
     url <- .source_url(source = source)
     file_info <- tibble::tibble(
-        date = wtss_cov$timeline, path = url, band = bands, res = wtss_cov$xres)
+        date = wtss_cov$timeline, path = url, band = bands,
+        res = .xres(wtss_cov))
 
     return(file_info)
 }
@@ -90,10 +91,10 @@
     cube_wtss <- .cube_create(
         source = source,
         collection = collection,
-        xmin = items$xmin,
-        xmax = items$xmax,
-        ymin = items$ymin,
-        ymax = items$ymax,
+        xmin = .xmin(items),
+        xmax = .xmax(items),
+        ymin = .ymin(items),
+        ymax = .ymax(items),
         crs  = items$crs,
         file_info = file_info
     )

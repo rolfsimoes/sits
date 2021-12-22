@@ -179,7 +179,7 @@ sits_accuracy.classified_image <- function(data, ..., validation_csv) {
     xy_tb <- .sits_proj_from_latlong(
         longitude = csv_tb$longitude,
         latitude = csv_tb$latitude,
-        crs = data$crs[[1]]
+        crs = .crs(data)[[1]]
     )
 
     # join lat-long with XY values in a single tibble
@@ -206,8 +206,8 @@ sits_accuracy.classified_image <- function(data, ..., validation_csv) {
         # filter the points inside the data cube
         points_row <- dplyr::filter(
             points,
-            X >= row$xmin & X <= row$xmax &
-                Y >= row$ymin & Y <= row$ymax
+            X >= .xmin(row) & X <= .xmax(row) &
+                Y >= .ymin(row) & Y <= .ymax(row)
         )
 
         # if there are no points in the cube, return an empty list

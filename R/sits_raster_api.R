@@ -52,7 +52,7 @@
 
     # precondition 3
     .check_that(
-        x = block[["nrows"]] > 0 && block[["ncols"]] > 0,
+        x = .nrows(block) > 0 && .ncols(block) > 0,
         msg = "invalid block"
     )
 

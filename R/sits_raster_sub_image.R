@@ -25,10 +25,10 @@
 
         # region of cube tile
         df <- data.frame(
-            X = c(cube[["xmin"]][[1]], cube[["xmax"]][[1]],
-                  cube[["xmax"]][[1]], cube[["xmin"]][[1]]),
-            Y = c(cube[["ymin"]][[1]], cube[["ymin"]][[1]],
-                  cube[["ymax"]][[1]], cube[["ymax"]][[1]])
+            X = c(.xmin(cube)[[1]], .xmax(cube)[[1]],
+                  .xmax(cube)[[1]], .xmin(cube)[[1]]),
+            Y = c(.ymin(cube)[[1]], .ymin(cube)[[1]],
+                  .ymax(cube)[[1]], .ymax(cube)[[1]])
         )
 
         # compute tile polygon
@@ -87,12 +87,12 @@
 
     sub_image <- c(first_row = 1,
                    first_col = 1,
-                   nrows = size[["nrows"]],
-                   ncols = size[["ncols"]],
-                   xmin = bbox[["xmin"]],
-                   xmax = bbox[["xmax"]],
-                   ymin = bbox[["ymin"]],
-                   ymax = bbox[["ymax"]])
+                   nrows = .nrows(size),
+                   ncols = .ncols(size),
+                   xmin = .xmin(bbox),
+                   xmax = .xmax(bbox),
+                   ymin = .ymin(bbox),
+                   ymax = .ymax(bbox))
 
     return(sub_image)
 }
@@ -110,22 +110,22 @@
 .sits_raster_sub_image_from_bbox <- function(bbox, cube) {
 
     # pre-conditions
-    .check_num(bbox[["xmin"]], max = bbox[["xmax"]],
+    .check_num(.xmin(bbox), max = .xmax(bbox),
                msg = "invalid bbox value")
 
-    .check_num(bbox[["ymin"]], max = bbox[["ymax"]],
+    .check_num(.ymin(bbox), max = .ymax(bbox),
                msg = "invalid bbox value")
 
-    .check_num(bbox[["xmin"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmin(bbox), min = .xmin(cube), max = .xmax(cube),
                msg = "bbox value is outside the cube")
 
-    .check_num(bbox[["xmax"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmax(bbox), min = .xmin(cube), max = .xmax(cube),
                msg = "bbox value is outside the cube")
 
-    .check_num(bbox[["ymin"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymin(bbox), min = .ymin(cube), max = .ymax(cube),
                msg = "bbox value is outside the cube")
 
-    .check_num(bbox[["ymax"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymax(bbox), min = .ymin(cube), max = .ymax(cube),
                msg = "bbox value is outside the cube")
 
     # get the resolution
@@ -139,57 +139,57 @@
 
     # set initial values
     si <- c(first_row = 1, first_col = 1,
-            nrows = size[["nrows"]], ncols = size[["ncols"]],
-            xmin = cube[["xmin"]], xmax = cube[["xmax"]],
-            ymin = cube[["ymin"]], ymax = cube[["ymax"]])
+            nrows = .nrows(size), ncols = .ncols(size),
+            xmin = .xmin(cube), xmax = .xmax(cube),
+            ymin = .ymin(cube), ymax = .ymax(cube))
 
     # find the first row (remember that rows runs from top to bottom and
     # Y coordinates increase from bottom to top)
     si[["first_row"]] <- unname(
-        floor((cube[["ymax"]] - bbox[["ymax"]]) / res[["yres"]])) + 1
+        floor((.ymax(cube) - .ymax(bbox)) / .yres(res))) + 1
 
     # adjust to fit bbox in cube resolution
-    si[["ymax"]] <- cube[["ymax"]] - res[["yres"]] * (si[["first_row"]] - 1)
+    .ymax(si) <- .ymax(cube) - .yres(res) * (si[["first_row"]] - 1)
 
     # find the first col (remember that rows runs from left to right and
     # X coordinates increase from left to right)
     si[["first_col"]] <- unname(
-        floor((bbox[["xmin"]] - cube[["xmin"]]) / res[["xres"]])) + 1
+        floor((.xmin(bbox) - .xmin(cube)) / .xres(res))) + 1
 
     # adjust to fit bbox in cube resolution
-    si[["xmin"]] <- cube[["xmin"]] + res[["xres"]] * (si[["first_col"]] - 1)
+    .xmin(si) <- .xmin(cube) + .xres(res) * (si[["first_col"]] - 1)
 
     # find the number of rows (remember that rows runs from top to bottom and
     # Y coordinates increase from bottom to top)
-    si[["nrows"]] <- unname(
-        floor((bbox[["ymax"]] - bbox[["ymin"]]) / res[["yres"]])) + 1
+    .nrows(si) <- unname(
+        floor((.ymax(bbox) - .ymin(bbox)) / .yres(res))) + 1
 
     # adjust to fit bbox in cube resolution
-    si[["ymin"]] <- si[["ymax"]] - res[["yres"]] * si[["nrows"]]
+    .ymin(si) <- .ymax(si) - .yres(res) * .nrows(si)
 
-    si[["ncols"]] <- unname(
-        floor((bbox[["xmax"]] - bbox[["xmin"]]) / res[["xres"]])) + 1
+    .ncols(si) <- unname(
+        floor((.xmax(bbox) - .xmin(bbox)) / .xres(res))) + 1
 
     # adjust to fit bbox in cube resolution
-    si[["xmax"]] <- si[["xmin"]] + res[["xres"]] * si[["ncols"]]
+    .xmax(si) <- .xmin(si) + .xres(res) * .ncols(si)
 
     # pre-conditions
-    .check_num(si[["xmin"]], max = si[["xmax"]],
+    .check_num(.xmin(si), max = .xmax(si),
                msg = "invalid subimage value")
 
-    .check_num(si[["ymin"]], max = si[["ymax"]],
+    .check_num(.ymin(si), max = .ymax(si),
                msg = "invalid subimage value")
 
-    .check_num(si[["xmin"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmin(si), min = .xmin(cube), max = .xmax(cube),
                msg = "invalid subimage value")
 
-    .check_num(si[["xmax"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmax(si), min = .xmin(cube), max = .xmax(cube),
                msg = "invalid subimage value")
 
-    .check_num(si[["ymin"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymin(si), min = .ymin(cube), max = .ymax(cube),
                msg = "invalid subimage value")
 
-    .check_num(si[["ymax"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymax(si), min = .ymin(cube), max = .ymax(cube),
                msg = "invalid subimage value")
 
     return(si)

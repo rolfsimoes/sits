@@ -255,8 +255,8 @@
     # filter the points inside the data cube space-time extent
     points <- dplyr::filter(
         points,
-        X > cube$xmin & X < cube$xmax &
-            Y > cube$ymin & Y < cube$ymax &
+        X > .xmin(cube) & X < .xmax(cube) &
+            Y > .ymin(cube) & Y < .ymax(cube) &
             start_date <= as.Date(timeline[length(timeline)]) &
             end_date >= as.Date(timeline[1])
     )
@@ -276,12 +276,12 @@
             end_date   = as.Date(point$end_date)
         )
         sample <- tibble::tibble(
-            longitude  = point$longitude,
-            latitude   = point$latitude,
+            longitude  = point[["longitude"]],
+            latitude   = point[["latitude"]],
             start_date = dates[[1]],
             end_date   = dates[[length(dates)]],
-            label      = point$label,
-            cube       = cube$collection
+            label      = point[["label"]],
+            cube       = cube[["collection"]]
         )
 
         # put them on a tibble

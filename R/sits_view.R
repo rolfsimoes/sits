@@ -69,10 +69,10 @@ sits_view.sits <- function(x, ...,
                          crs = 4326)
     # get the bounding box
     samples_bbox <- sf::st_bbox(samples)
-    dist_x <- (samples_bbox[["xmax"]] - samples_bbox[["xmin"]])
-    dist_y <- (samples_bbox[["ymax"]] - samples_bbox[["ymin"]])
-    lng_center <- samples_bbox[["xmin"]]  + dist_x/2.0
-    lat_center <- samples_bbox[["ymin"]] + dist_y/2.0
+    dist_x <- (.xmax(samples_bbox) - .xmin(samples_bbox))
+    dist_y <- (.ymax(samples_bbox) - .ymin(samples_bbox))
+    lng_center <- .xmin(samples_bbox)  + dist_x/2.0
+    lat_center <- .ymin(samples_bbox) + dist_y/2.0
     # get the labels
     labels <- sits_labels(x)
 
@@ -104,10 +104,10 @@ sits_view.sits <- function(x, ...,
         leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "ESRI") %>%
         leaflet::addProviderTiles(leaflet::providers$GeoportailFrance.orthos, group = "GeoPortalFrance") %>%
         leaflet::addProviderTiles(leaflet::providers$OpenStreetMap.Mapnik, group = "OSM") %>%
-        leaflet::flyToBounds(lng1 = samples_bbox[["xmin"]],
-                             lat1 = samples_bbox[["ymin"]],
-                             lng2 = samples_bbox[["xmax"]],
-                             lat2 = samples_bbox[["ymax"]]) %>%
+        leaflet::flyToBounds(lng1 = .xmin(samples_bbox),
+                             lat1 = .ymin(samples_bbox),
+                             lng2 = .xmax(samples_bbox),
+                             lat2 = .ymax(samples_bbox)) %>%
         leaflet::addCircleMarkers(data   = samples,
                                   popup  = ~label,
                                   color  = ~factpal(label),

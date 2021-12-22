@@ -303,10 +303,10 @@
                 source     = source,
                 collection = collection,
                 tile       = tile[["tile"]],
-                xmin       = bbox[["xmin"]],
-                xmax       = bbox[["xmax"]],
-                ymin       = bbox[["ymin"]],
-                ymax       = bbox[["ymax"]],
+                xmin       = .xmin(bbox),
+                xmax       = .xmax(bbox),
+                ymin       = .ymin(bbox),
+                ymax       = .ymax(bbox),
                 crs        = tile[["crs"]],
                 file_info  = file_info)
 
@@ -379,10 +379,10 @@
     .check_num(nrow(file_info), min = 1, msg = "invalid 'file_info' value")
 
     # get bbox based on file_info
-    xmin <- max(file_info[["xmin"]])
-    ymin <- max(file_info[["ymin"]])
-    xmax <- min(file_info[["xmax"]])
-    ymax <- min(file_info[["ymax"]])
+    xmin <- max(.xmin(file_info))
+    ymin <- max(.ymin(file_info))
+    xmax <- min(.xmax(file_info))
+    ymax <- min(.ymax(file_info))
 
     # post-condition
     .check_that(xmin < xmax,

@@ -133,10 +133,10 @@
 
     # create a list of cube view
     cv <- gdalcubes::cube_view(
-        extent = list(left   = bbox_roi[["xmin"]],
-                      right  = bbox_roi[["xmax"]],
-                      bottom = bbox_roi[["ymin"]],
-                      top    = bbox_roi[["ymax"]],
+        extent = list(left   = .xmin(bbox_roi),
+                      right  = .xmax(bbox_roi),
+                      bottom = .ymin(bbox_roi),
+                      top    = .ymax(bbox_roi),
                       t0 = format(toi[["max_min_date"]], "%Y-%m-%d"),
                       t1 = format(toi[["min_max_date"]], "%Y-%m-%d")),
         srs = tile[["crs"]][[1]],
@@ -168,8 +168,8 @@
 
     create_gc_database <- function(cube) {
 
-        file_info <- dplyr::select(cube, .data[["file_info"]],
-                                   .data[["crs"]]) %>%
+        file_info <-
+            dplyr::select(cube, .data[["file_info"]], .data[["crs"]]) %>%
             tidyr::unnest(cols = c("file_info")) %>%
             dplyr::transmute(fid = .data[["fid"]],
                              xmin = .data[["xmin"]],

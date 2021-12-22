@@ -139,7 +139,7 @@
         # define the file name of the raster file to be written
         filename_block <- paste0(
             tools::file_path_sans_ext(probs_cube$file_info[[1]]$path),
-            "_block_", b[["first_row"]], "_", b[["nrows"]], ".tif"
+            "_block_", b[["first_row"]], "_", .nrows(b), ".tif"
         )
 
         # resume processing in case of failure
@@ -154,7 +154,7 @@
             # if file can be opened, check if the result is correct
             # this file will not be processed again
             if (!purrr::is_null(r_obj))
-                if (.raster_nrows(r_obj) == b[["nrows"]]) {
+                if (.raster_nrows(r_obj) == .nrows(b)) {
                     # log
                     .sits_debug_log(output_dir = output_dir,
                                     event      = "skipping block",
@@ -209,14 +209,14 @@
 
         # create a new raster
         r_obj <- .raster_new_rast(
-            nrows   = params$nrows,
-            ncols   = params$ncols,
-            xmin    = params$xmin,
-            xmax    = params$xmax,
-            ymin    = params$ymin,
-            ymax    = params$ymax,
+            nrows   = .nrows(params),
+            ncols   = .ncols(params),
+            xmin    = .xmin(params),
+            xmax    = .xmax(params),
+            ymin    = .ymin(params),
+            ymax    = .ymax(params),
             nlayers = length(labels),
-            crs     = params$crs
+            crs     = .crs(params)
         )
 
         # copy values

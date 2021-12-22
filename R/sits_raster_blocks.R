@@ -78,8 +78,8 @@
     if (proc_bloat == 0) proc_bloat <- multicores
 
     # number of rows and cols
-    nrows <- sub_image[["nrows"]]
-    ncols <- sub_image[["ncols"]]
+    nrows <- .nrows(sub_image)
+    ncols <- .ncols(sub_image)
     # single instance size
     single_data_size <- nrows * ncols * nbytes
     # total size including all bands

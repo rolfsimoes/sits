@@ -171,9 +171,9 @@
         terra::readStart(r_obj)
         values <- terra::readValues(x      = r_obj,
                                     row    = block[["first_row"]],
-                                    nrows  = block[["nrows"]],
+                                    nrows  = .nrows(block),
                                     col    = block[["first_col"]],
-                                    ncols  = block[["ncols"]],
+                                    ncols  = .ncols(block),
                                     mat    = TRUE)
         # close file descriptor
         terra::readStop(r_obj)
@@ -190,11 +190,11 @@
     x1 <- terra::xFromCol(object = r_obj,
                           col    = c(block[["first_col"]]))
     x2 <- terra::xFromCol(object = r_obj,
-                          col    = block[["first_col"]] + block[["ncols"]] - 1)
+                          col    = block[["first_col"]] + .ncols(block) - 1)
     y1 <- terra::yFromRow(object = r_obj,
                           row    = c(block[["first_row"]]))
     y2 <- terra::yFromRow(object = r_obj,
-                          row    = block[["first_row"]] + block[["nrows"]] - 1)
+                          row    = block[["first_row"]] + .nrows(block) - 1)
 
     # xmin, xmax, ymin, ymax
     extent <- terra::ext(

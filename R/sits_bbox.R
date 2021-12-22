@@ -55,15 +55,15 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
 
     # create and return the bounding box
     if (nrow(data) == 1) {
-        bbox <- c(xmin = data$xmin,
-                  xmax = data$xmax,
-                  ymin = data$ymin,
-                  ymax = data$ymax)
+        bbox <- c(xmin = .xmin(data),
+                  xmax = .xmax(data),
+                  ymin = .ymin(data),
+                  ymax = .ymax(data))
     } else {
-        bbox <- c(xmin = min(data$xmin),
-                  xmax = max(data$xmax),
-                  ymin = min(data$ymin),
-                  ymax = max(data$ymax)
+        bbox <- c(xmin = min(.xmin(data)),
+                  xmax = max(.xmax(data)),
+                  ymin = min(.ymin(data)),
+                  ymax = max(.ymax(data))
         )
     }
 
@@ -71,12 +71,12 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     if (wgs84) {
 
         bbox <- c(
-            .sits_proj_to_latlong(x = bbox[["xmin"]],
-                                  y = bbox[["ymin"]],
-                                  crs = data$crs[[1]]),
-            .sits_proj_to_latlong(x = bbox[["xmax"]],
-                                  y = bbox[["ymax"]],
-                                  crs = data$crs[[1]])
+            .sits_proj_to_latlong(x = .xmin(bbox),
+                                  y = .ymin(bbox),
+                                  crs = .crs(data)[[1]]),
+            .sits_proj_to_latlong(x = .xmax(bbox),
+                                  y = .ymax(bbox),
+                                  crs = .crs(data)[[1]])
         )
 
         names(bbox) <- c("lon_min", "lat_min", "lon_max", "lat_max")
@@ -87,30 +87,6 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     return(bbox)
 }
 
-
-#' @title Find the bounding box for a set of time series
-#' @name .sits_bbox_time_series
-#' @keywords internal
-#' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
-#'
-#' @description Given a set of time series, find the bounding box.
-#'
-#' @param data            A tibble with a set of time series
-#' @return A vector the bounding box
-.sits_bbox_time_series <- function(data) {
-    # check if the data is a time series
-    .sits_tibble_test(data)
-    # return the bounding box
-    bbox <- vector(length = 4)
-    names(bbox) <- c("xmin", "xmax", "ymin", "ymax")
-
-    bbox["xmin"] <- min(data$longitude)
-    bbox["xmax"] <- max(data$longitude)
-    bbox["ymin"] <- min(data$latitude)
-    bbox["ymax"] <- max(data$latitude)
-
-    return(bbox)
-}
 #' @title Intersection between a bounding box and a cube
 #' @name .sits_bbox_intersect
 #' @keywords internal
@@ -124,35 +100,33 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     bbox_out <- vector("double", length = 4)
     names(bbox_out) <- c("xmin", "xmax", "ymin", "ymax")
 
-    if (bbox["xmin"] > cube$xmax |
-        bbox["xmax"] < cube$xmin |
-        bbox["ymin"] > cube$ymax |
-        bbox["ymax"] < cube$ymin) {
+    if (.xmin(bbox) > .xmax(cube) | .xmax(bbox) < .xmin(cube) |
+        .ymin(bbox) > .ymax(cube) | .ymax(bbox) < .ymin(cube)) {
         return(NULL)
     }
 
-    if (bbox["xmin"] < cube$xmin) {
-        bbox_out["xmin"] <- cube$xmin
+    if (.xmin(bbox) < .xmin(cube)) {
+        .xmin(bbox_out) <- .xmin(cube)
     } else {
-        bbox_out["xmin"] <- bbox["xmin"]
+        .xmin(bbox_out) <- .xmin(bbox)
     }
 
-    if (bbox["xmax"] > cube$xmax) {
-        bbox_out["xmax"] <- cube$xmax
+    if (.xmax(bbox) > .xmax(cube)) {
+        .xmax(bbox_out) <- .xmax(cube)
     } else {
-        bbox_out["xmax"] <- bbox["xmax"]
+        .xmax(bbox_out) <- .xmax(bbox)
     }
 
-    if (bbox["ymin"] < cube$ymin) {
-        bbox_out["ymin"] <- cube$ymin
+    if (.ymin(bbox) < .ymin(cube)) {
+        .ymin(bbox_out) <- .ymin(cube)
     } else {
-        bbox_out["ymin"] <- bbox["ymin"]
+        .ymin(bbox_out) <- .ymin(bbox)
     }
 
-    if (bbox["ymax"] > cube$ymax) {
-        bbox_out["ymax"] <- cube$ymax
+    if (.ymax(bbox) > .ymax(cube)) {
+        .ymax(bbox_out) <- .ymax(cube)
     } else {
-        bbox_out["ymax"] <- bbox["ymax"]
+        .ymax(bbox_out) <- .ymax(bbox)
     }
 
     return(bbox_out)

@@ -51,10 +51,10 @@
     cube_satveg <- .cube_create(
         source = source,
         collection = collection,
-        xmin = bbox[["xmin"]],
-        xmax = bbox[["xmax"]],
-        ymin = bbox[["ymin"]],
-        ymax = bbox[["ymax"]],
+        xmin = .xmin(bbox),
+        xmax = .xmax(bbox),
+        ymin = .ymin(bbox),
+        ymax = .ymax(bbox),
         crs = crs,
         file_info = file_info
     )

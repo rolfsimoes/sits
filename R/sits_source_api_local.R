@@ -269,10 +269,10 @@
         source = source,
         collection = collection,
         tile = tile,
-        xmin = max(file_info[["xmin"]]),
-        xmax = min(file_info[["xmax"]]),
-        ymin = max(file_info[["ymin"]]),
-        ymax = min(file_info[["ymax"]]),
+        xmin = max(.xmin(file_info)),
+        xmax = min(.xmax(file_info)),
+        ymin = max(.ymin(file_info)),
+        ymax = min(.ymax(file_info)),
         crs = crs,
         file_info = file_info
     )

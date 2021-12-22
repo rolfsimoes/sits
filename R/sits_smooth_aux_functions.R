@@ -48,7 +48,7 @@
     n_bytes <- 8
 
     # total memory needed to do all work in GB
-    needed_memory <-  1E-09 * size[["ncols"]] * size[["nrows"]] * n_layers * bloat_mem * n_bytes
+    needed_memory <-  1E-09 * .ncols(size) * .nrows(size) * n_layers * bloat_mem * n_bytes
 
     # minimum block size
     min_block_x_size <- size["ncols"] # for now, only vertical blocking
@@ -56,7 +56,7 @@
 
     # compute factors
     memory_factor <- needed_memory / memsize
-    blocking_factor <- size[["ncols"]] / min_block_x_size * size[["nrows"]] / min_block_y_size
+    blocking_factor <- .ncols(size) / min_block_x_size * .nrows(size) / min_block_y_size
 
     # stop if blocking factor is less than memory factor!
     # reason: the provided memory is not enough to process the data by
@@ -79,7 +79,7 @@
         # theoretical max_multicores = floor(blocking_factor / memory_factor),
         block_x_size = floor(min_block_x_size),
         block_y_size = min(floor(blocking_factor / memory_factor / multicores),
-                           size[["nrows"]])
+                           .nrows(size))
     )
 
     return(blocks)

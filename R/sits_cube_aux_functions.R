@@ -427,8 +427,8 @@ NULL
 .cube_params_block <- function(cube, block) {
 
     size <- .cube_size(cube)
-    nrows <- size[["nrows"]]
-    ncols <- size[["ncols"]]
+    nrows <- .nrows(size)
+    ncols <- .ncols(size)
 
     # pre-conditions
     .check_num(block[["first_row"]], min = 1, max = nrows,
@@ -437,45 +437,45 @@ NULL
     .check_num(block[["first_col"]], min = 1, max = ncols,
                msg = "invalid block value")
 
-    .check_num(block[["nrows"]], min = 1, max = nrows,
+    .check_num(.nrows(block), min = 1, max = nrows,
                msg = "invalid block value")
 
-    .check_num(block[["ncols"]], min = 1, max = ncols,
+    .check_num(.ncols(block), min = 1, max = ncols,
                msg = "invalid block value")
 
     res <- .cube_resolution(cube)
 
     # compute new Y extent
-    ymax  <-  cube[["ymax"]] - (block[["first_row"]] - 1) * res[["yres"]]
-    ymin  <-  ymax - block[["nrows"]] * res[["yres"]]
+    ymax  <-  .ymax(cube) - (block[["first_row"]] - 1) * .yres(res)
+    ymin  <-  ymax - .nrows(block) * .yres(res)
 
     # compute new X extent
-    xmin  <-  cube[["xmin"]] + (block[["first_col"]] - 1) * res[["xres"]]
-    xmax  <-  xmin + block[["ncols"]] * res[["xres"]]
+    xmin  <-  .xmin(cube) + (block[["first_col"]] - 1) * .xres(res)
+    xmax  <-  xmin + .ncols(block) * .xres(res)
 
     # prepare result
     params <- tibble::tibble(
-        nrows = block[["nrows"]],
-        ncols = block[["ncols"]],
+        nrows = .nrows(block),
+        ncols = .ncols(block),
         xmin  = xmin,
         xmax  = xmax,
         ymin  = ymin,
         ymax  = ymax,
-        crs   = cube[["crs"]]
+        crs   = .crs(cube)
     )
 
 
     # post-conditions
-    .check_num(params[["xmin"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmin(params), min = .xmin(cube), max = .xmax(cube),
                msg = "invalid params value")
 
-    .check_num(params[["xmax"]], min = cube[["xmin"]], max = cube[["xmax"]],
+    .check_num(.xmax(params), min = .xmin(cube), max = .xmax(cube),
                msg = "invalid params value")
 
-    .check_num(params[["ymin"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymin(params), min = .ymin(cube), max = .ymax(cube),
                msg = "invalid params value")
 
-    .check_num(params[["ymax"]], min = cube[["ymin"]], max = cube[["ymax"]],
+    .check_num(.ymax(params), min = .ymin(cube), max = .ymax(cube),
                msg = "invalid params value")
 
     return(params)
@@ -530,12 +530,12 @@ NULL
         band       = band_name,
         start_date = start_date,
         end_date   = end_date,
-        xmin       = bbox[["xmin"]],
-        xmax       = bbox[["xmax"]],
-        ymin       = bbox[["ymin"]],
-        ymax       = bbox[["ymax"]],
-        xres       = res[["xres"]],
-        yres       = res[["yres"]],
+        xmin       = .xmin(bbox),
+        xmax       = .xmax(bbox),
+        ymin       = .ymin(bbox),
+        ymax       = .ymax(bbox),
+        xres       = .xres(res),
+        yres       = .yres(res),
         nrows      = cube$file_info[[1]]$nrows[[1]],
         ncols      = cube$file_info[[1]]$ncols[[1]],
         path       = file_name
@@ -543,14 +543,14 @@ NULL
 
     # set the metadata for the probability cube
     dev_cube <- .cube_create(
-        source     = cube$source,
-        collection = cube$collection,
-        tile       = cube$tile,
-        xmin       = bbox[["xmin"]],
-        xmax       = bbox[["xmax"]],
-        ymin       = bbox[["ymin"]],
-        ymax       = bbox[["ymax"]],
-        crs        = cube$crs,
+        source     = cube[["source"]],
+        collection = cube[["collection"]],
+        tile       = cube[["tile"]],
+        xmin       = .xmin(bbox),
+        xmax       = .xmax(bbox),
+        ymin       = .ymin(bbox),
+        ymax       = .ymax(bbox),
+        crs        = .crs(cube),
         labels     = labels,
         file_info  = file_info
     )
@@ -565,8 +565,8 @@ NULL
     # get first file_info
     file_info <- .cube_file_info(cube, bands = bands)
 
-    xres <- unique(file_info[["xres"]])
-    yres <- unique(file_info[["yres"]])
+    xres <- unique(.xres(file_info))
+    yres <- unique(.yres(file_info))
 
     # post-condition
     .check_num(xres, min = 0, allow_zero = FALSE,
@@ -597,8 +597,8 @@ NULL
     file_info <- .cube_file_info(cube, bands = bands)
 
     # get the file size
-    nrows <- unique(file_info[["nrows"]])
-    ncols <- unique(file_info[["ncols"]])
+    nrows <- unique(.nrows(file_info))
+    ncols <- unique(.ncols(file_info))
 
     # post-conditions
     .check_num(nrows, min = 1, len_min = 1, len_max = 1,
@@ -629,9 +629,9 @@ NULL
         nrows = .raster_nrows(r_obj),
         ncols = .raster_ncols(r_obj)
     )
-    .check_num(size[["nrows"]], min = 1, allow_null = FALSE,
+    .check_num(.nrows(size), min = 1, allow_null = FALSE,
                is_integer = TRUE, msg = "invalid number of rows")
-    .check_num(size[["ncols"]], min = 1, allow_null = FALSE,
+    .check_num(.ncols(size), min = 1, allow_null = FALSE,
                is_integer = TRUE, msg = "invalid number of columns")
 
     return(size)
