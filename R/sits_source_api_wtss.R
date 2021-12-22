@@ -90,8 +90,6 @@
     cube_wtss <- .cube_create(
         source = source,
         collection = collection,
-        satellite = .source_collection_satellite(source, collection),
-        sensor = .source_collection_sensor(source, collection),
         xmin = items$xmin,
         xmax = items$xmax,
         ymin = items$ymin,

@@ -6,8 +6,6 @@
 #'
 #' @param source      Source of data
 #' @param collection  Image collection
-#' @param satellite   Name of satellite
-#' @param sensor      Name of sensor
 #' @param tile        Tile of the image collection
 #' @param xmin        Spatial extent (xmin).
 #' @param ymin        Spatial extent (ymin).
@@ -19,9 +17,7 @@
 #' @return  A tibble containing a data cube
 #'
 .cube_create <- function(source,
-                         collection = NA_character_,
-                         satellite,
-                         sensor,
+                         collection,
                          tile = NA_character_,
                          xmin,
                          xmax,
@@ -36,8 +32,8 @@
     cube <- tibble::tibble(
         source = source,
         collection = collection,
-        satellite = satellite,
-        sensor = sensor,
+        satellite = .source_collection_satellite(source, collection),
+        sensor = .source_collection_sensor(source, collection),
         tile  = tile,
         xmin = xmin,
         xmax = xmax,
@@ -144,21 +140,16 @@ NULL
     .check_chr(band, len_min = 1, len_max = 1,
                msg = "invalid 'band' parameter")
 
-    .check_chr_within(band,
-                      within = .cube_bands(cube = cube, add_cloud = FALSE),
-                      discriminator = "one_of",
-                      case_sensitive = FALSE,
-                      msg = "invalid 'band' parameter")
-
     # bands names are upper case
     band <- toupper(band)
 
     mv <- .config_get(key = c("sources", .cube_source(cube = cube),
                                "collections", .cube_collection(cube = cube),
-                               "bands", band, "missing_value"))
+                               "bands", band, "missing_value"),
+                      default = NA_real_)
 
     # post-condition
-    .check_num(mv, len_min = 1, len_max = 1,
+    .check_num(mv, allow_na = TRUE, len_min = 1, len_max = 1,
                msg = "invalid 'missing_value' value")
 
     return(mv)
@@ -171,21 +162,16 @@ NULL
     .check_chr(band, len_min = 1, len_max = 1,
                msg = "invalid 'band' parameter")
 
-    .check_chr_within(band,
-                      within = .cube_bands(cube = cube, add_cloud = FALSE),
-                      discriminator = "one_of",
-                      case_sensitive = FALSE,
-                      msg = "invalid 'band' parameter")
-
     # bands names are upper case
     band <- toupper(band)
 
     mv <- .config_get(key = c("sources", .cube_source(cube = cube),
                                "collections", .cube_collection(cube = cube),
-                               "bands", band, "minimum_value"))
+                               "bands", band, "minimum_value"),
+                      default = -Inf)
 
     # post-condition
-    .check_num(mv, len_min = 1, len_max = 1,
+    .check_num(mv, allow_na = TRUE, len_min = 1, len_max = 1,
                msg = "invalid 'minimum_value' value")
 
     return(mv)
@@ -198,18 +184,13 @@ NULL
     .check_chr(band, len_min = 1, len_max = 1,
                msg = "invalid 'band' parameter")
 
-    .check_chr_within(band,
-                      within = .cube_bands(cube = cube, add_cloud = FALSE),
-                      discriminator = "one_of",
-                      case_sensitive = FALSE,
-                      msg = "invalid 'band' parameter")
-
     # bands names are upper case
     band <- toupper(band)
 
     mv <- .config_get(key = c("sources", .cube_source(cube = cube),
                                "collections", .cube_collection(cube = cube),
-                               "bands", band, "maximum_value"))
+                               "bands", band, "maximum_value"),
+                      default = Inf)
 
     # post-condition
     .check_num(mv, len_min = 1, len_max = 1,
@@ -225,18 +206,13 @@ NULL
     .check_chr(band, len_min = 1, len_max = 1,
                msg = "invalid 'band' parameter")
 
-    .check_chr_within(band,
-                      within = .cube_bands(cube = cube, add_cloud = FALSE),
-                      discriminator = "one_of",
-                      case_sensitive = FALSE,
-                      msg = "invalid 'band' parameter")
-
     # bands names are upper case
     band <- toupper(band)
 
     sf <- .config_get(key = c("sources", .cube_source(cube = cube),
                                "collections", .cube_collection(cube = cube),
-                               "bands", band, "scale_factor"))
+                               "bands", band, "scale_factor"),
+                      default = .config_get("raster_cube_scale_factor"))
 
     # post-condition
     .check_num(sf, allow_zero = FALSE, len_min = 1, len_max = 1,
@@ -252,18 +228,13 @@ NULL
     .check_chr(band, len_min = 1, len_max = 1,
                msg = "invalid 'band' parameter")
 
-    .check_chr_within(band,
-                      within = .cube_bands(cube = cube, add_cloud = FALSE),
-                      discriminator = "one_of",
-                      case_sensitive = FALSE,
-                      msg = "invalid 'band' parameter")
-
     # bands names are upper case
     band <- toupper(band)
 
     ov <- .config_get(key = c("sources", .cube_source(cube = cube),
                                "collections", .cube_collection(cube = cube),
-                               "bands", band, "offset_value"))
+                               "bands", band, "offset_value"),
+                      default = .config_get("raster_cube_offset_value"))
 
     # post-condition
     .check_num(ov, len_min = 1, len_max = 1,
@@ -574,8 +545,6 @@ NULL
     dev_cube <- .cube_create(
         source     = cube$source,
         collection = cube$collection,
-        satellite  = cube$satellite,
-        sensor     = cube$sensor,
         tile       = cube$tile,
         xmin       = bbox[["xmin"]],
         xmax       = bbox[["xmax"]],

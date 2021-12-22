@@ -6,9 +6,7 @@
 \usage{
 .cube_create(
   source,
-  collection = NA_character_,
-  satellite,
-  sensor,
+  collection,
   tile = NA_character_,
   xmin,
   xmax,
@@ -23,10 +21,6 @@
 \item{source}{Source of data}
 
 \item{collection}{Image collection}
-
-\item{satellite}{Name of satellite}
-
-\item{sensor}{Name of sensor}
 
 \item{tile}{Tile of the image collection}
 

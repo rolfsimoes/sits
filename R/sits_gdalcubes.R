@@ -366,8 +366,6 @@
     cube_gc <- .cube_create(
         source     = tile[["source"]],
         collection = tile[["collection"]],
-        satellite  = tile[["satellite"]],
-        sensor     = tile[["sensor"]],
         tile       = tile[["tile"]],
         xmin       = cv[["space"]][["left"]],
         xmax       = cv[["space"]][["right"]],

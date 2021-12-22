@@ -302,8 +302,6 @@
             tile <- .cube_create(
                 source     = source,
                 collection = collection,
-                satellite  = .source_collection_satellite(source, collection),
-                sensor     = .source_collection_sensor(source, collection),
                 tile       = tile[["tile"]],
                 xmin       = bbox[["xmin"]],
                 xmax       = bbox[["xmax"]],
