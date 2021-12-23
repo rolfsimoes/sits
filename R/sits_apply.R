@@ -44,6 +44,81 @@ sits_apply.sits <- function(data, ...) {
     .sits_fast_apply(data, col = "time_series", fn = dplyr::mutate, ...)
 }
 
+.raster_preprocess <- function(file,
+                               block,
+                               missing_value,
+                               minimum_value,
+                               maximum_value,
+                               scale_factor,
+                               offset_value, ...,
+                               impute_fn = NULL,
+                               filter_fn = NULL,
+                               normalize_fn = NULL) {
+
+    # pre-conditions
+    .check_block(block, msg = "invalid block parameter")
+
+    .check_num(missing_value, len_min = 1, len_max = 1,
+               msg = "invalid missing_value parameter")
+
+    .check_num(minimum_value, len_min = 1, len_max = 1,
+               msg = "invalid minimum_value parameter")
+
+    .check_num(maximum_value, len_min = 1, len_max = 1,
+               msg = "invalid maximum_value parameter")
+
+    .check_num(scale_factor, len_min = 1, len_max = 1,
+               msg = "invalid scale_factor parameter")
+
+    .check_num(offset_value, len_min = 1, len_max = 1,
+               msg = "invalid offset_value parameter")
+
+    # read the values
+    values <- .raster_read_rast(file, block = block)
+
+    # get input dimension
+    d <- dim(values)
+
+    # correct NA, minimum, maximum, and missing values
+    values[values == missing_value] <- NA
+    values[values < minimum_value] <- NA
+    values[values > maximum_value] <- NA
+
+    # impute NA pixels
+    if (!is.null(impute_fn) && any(is.na(values))) {
+
+        .check_that(inherits(impute_fn, "function"))
+
+        values <- impute_fn(values)
+    }
+
+    # compute scale and offset
+    values <- scale_factor * values + offset_value
+
+    # filter the data
+    if (!(is.null(filter_fn))) {
+
+        .check_that(inherits(filter_fn, "function"))
+
+        values <- filter_fn(values)
+    }
+
+    # normalize the data
+    if (!is.null(normalize_fn)) {
+
+        .check_that(inherits(normalize_fn, "function"))
+
+        values <- normalize_fn(values)
+    }
+
+    # post-conditions
+    .check_that(all(d == dim(values)),
+                local_msg = "output has different dimension than input",
+                msg = "invalid output values")
+
+    return(values)
+}
+
 #' @rdname sits_apply
 #' @export
 sits_apply.raster_cube <- function(data, ...,
@@ -99,42 +174,29 @@ sits_apply.raster_cube <- function(data, ...,
                 tidyr::pivot_wider(names_from = "band",
                                    values_from = "path")
 
+            # get input bands
+            in_bands <- names(in_files)
+
             # load bands data
-            in_values <- purrr::map(names(in_files), function(band) {
-
-                # get file path
-                file <- in_files[[band]]
-
-                # read the values
-                values <- .raster_read_rast(file)
+            in_values <- purrr::map(in_bands, function(band) {
 
                 # get the missing values, minimum values and scale factors
-                missing_value <- .cube_band_missing_value(cube = cube,
-                                                          band = band)
-                minimum_value <- .cube_band_minimum_value(cube = cube,
-                                                          band = band)
-                maximum_value <- .cube_band_maximum_value(cube = cube,
-                                                          band = band)
-
-                # correct NA, minimum, maximum, and missing values
-                values[values < minimum_value] <- NA
-                values[values > maximum_value] <- NA
-                values[values == missing_value] <- NA
+                missing_value <- .cube_band_missing_value(data, band = band)
+                minimum_value <- .cube_band_minimum_value(data, band = band)
+                maximum_value <- .cube_band_maximum_value(data, band = band)
 
                 # scale the data set
-                scale_factor <- .cube_band_scale_factor(cube, band = band)
-                offset_value <- .cube_band_offset_value(cube = cube,
-                                                        band = band)
+                scale_factor <- .cube_band_scale_factor(data, band = band)
+                offset_value <- .cube_band_offset_value(data, band = band)
 
-                # compute scale and offset
-                values <- scale_factor * values + offset_value
+                # preprocess data
+                .raster_preprocess(in_files[[band]],
+                                   missing_value = missing_value,
+                                   minimum_value = minimum_value,
+                                   maximum_value = maximum_value,
+                                   scale_factor = scale_factor,
+                                   offset_value = offset_value)
 
-                # remove NA pixels
-                if (!purrr::is_null(impute_fn) && any(is.na(values))) {
-                    values <- impute_fn(values)
-                }
-
-                return(values)
             })
 
             # set band names
