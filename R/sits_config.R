@@ -490,16 +490,11 @@ sits_list_collections <- function(source = NULL) {
 #' @return config values associated to a key
 .config_get <- function(key, default = NULL) {
 
-    res <- tryCatch({
-        sits_env$config[[key]]
-    },
-    error = function(e) {
-        return(default)
-    })
+    res <- sits_env$config[[key]]
 
     # set default
-    if (is.null(res))
-        res <- default
+    if (is.null(res) && !missing(default))
+        return(default)
 
     # post-condition
     .check_null(res,
