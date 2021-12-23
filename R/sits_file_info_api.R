@@ -1,5 +1,9 @@
-
 .crs <- function(x) {
+
+    UseMethod(".crs", x)
+}
+
+.crs.default <- function(x) {
 
     .check_chr_contains(names(x), contains = "crs",
                         msg = "object does not have 'crs' variable")
@@ -9,6 +13,11 @@
 
 .xmin <- function(x) {
 
+    UseMethod(".xmin", x)
+}
+
+.xmin.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "xmin",
                         msg = "object does not have 'xmin' variable")
 
@@ -16,6 +25,11 @@
 }
 
 `.xmin<-` <- function(x, value) {
+
+    UseMethod(".xmin<-", x)
+}
+
+`.xmin<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "xmin",
                         msg = "object does not have 'xmin' variable")
@@ -26,6 +40,11 @@
 
 .xmax <- function(x) {
 
+    UseMethod(".xmax", x)
+}
+
+.xmax.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "xmax",
                         msg = "object does not have 'xmax' variable")
 
@@ -33,6 +52,11 @@
 }
 
 `.xmax<-` <- function(x, value) {
+
+    UseMethod(".xmax<-", x)
+}
+
+`.xmax<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "xmax",
                         msg = "object does not have 'xmax' variable")
@@ -43,6 +67,11 @@
 
 .ymin <- function(x) {
 
+    UseMethod(".ymin", x)
+}
+
+.ymin.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "ymin",
                         msg = "object does not have 'ymin' variable")
 
@@ -50,6 +79,11 @@
 }
 
 `.ymin<-` <- function(x, value) {
+
+    UseMethod(".ymin<-", x)
+}
+
+`.ymin<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "ymin",
                         msg = "object does not have 'ymin' variable")
@@ -60,6 +94,11 @@
 
 .ymax <- function(x) {
 
+    UseMethod(".ymax", x)
+}
+
+.ymax.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "ymax",
                         msg = "object does not have 'ymax' variable")
 
@@ -67,6 +106,11 @@
 }
 
 `.ymax<-` <- function(x, value) {
+
+    UseMethod(".ymax<-", x)
+}
+
+`.ymax<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "ymax",
                         msg = "object does not have 'ymax' variable")
@@ -77,6 +121,11 @@
 
 .nrows <- function(x) {
 
+    UseMethod(".nrows", x)
+}
+
+.nrows.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "nrows",
                         msg = "object does not have 'nrows' variable")
 
@@ -84,6 +133,11 @@
 }
 
 `.nrows<-` <- function(x, value) {
+
+    UseMethod(".nrows<-", x)
+}
+
+`.nrows<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "nrows",
                         msg = "object does not have 'nrows' variable")
@@ -97,6 +151,11 @@
 
 .ncols <- function(x) {
 
+    UseMethod(".ncols", x)
+}
+
+.ncols.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "ncols",
                         msg = "object does not have 'ncols' variable")
 
@@ -104,6 +163,11 @@
 }
 
 `.ncols<-` <- function(x, value) {
+
+    UseMethod(".ncols<-", x)
+}
+
+`.ncols<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "ncols",
                         msg = "object does not have 'ncols' variable")
@@ -117,13 +181,41 @@
 
 .xres <- function(x) {
 
+    UseMethod(".xres", x)
+}
+
+.xres.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "xres",
                         msg = "object does not have 'xres' variable")
 
     x[["xres"]]
 }
 
+`.xres<-` <- function(x, value) {
+
+    UseMethod(".xres<-", x)
+}
+
+
+`.xres<-.default` <- function(x, value) {
+
+    .check_chr_contains(names(x), contains = "xres",
+                        msg = "object does not have 'xres' variable")
+
+    .check_num(value, allow_zero = FALSE,
+               msg = "invalid xres value")
+
+    x[["xres"]] <- value
+    x
+}
+
 .yres <- function(x) {
+
+    UseMethod(".yres", x)
+}
+
+.yres.default <- function(x) {
 
     .check_chr_contains(names(x), contains = "yres",
                         msg = "object does not have 'yres' variable")
@@ -131,7 +223,30 @@
     x[["yres"]]
 }
 
+`.yres<-` <- function(x, value) {
+
+    UseMethod(".yres<-", x)
+}
+
+
+`.yres<-.default` <- function(x, value) {
+
+    .check_chr_contains(names(x), contains = "yres",
+                        msg = "object does not have 'yres' variable")
+
+    .check_num(value, allow_zero = FALSE,
+               msg = "invalid yres value")
+
+    x[["yres"]] <- value
+    x
+}
+
 .first_row <- function(x) {
+
+    UseMethod(".first_row", x)
+}
+
+.first_row.default <- function(x) {
 
     .check_chr_contains(names(x), contains = "first_row",
                         msg = "object does not have 'first_row' variable")
@@ -140,6 +255,11 @@
 }
 
 `.first_row<-` <- function(x, value) {
+
+    UseMethod(".first_row<-", x)
+}
+
+`.first_row<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "first_row",
                         msg = "object does not have 'first_row' variable")
@@ -153,6 +273,11 @@
 
 .first_col <- function(x) {
 
+    UseMethod(".first_col", x)
+}
+
+.first_col.default <- function(x) {
+
     .check_chr_contains(names(x), contains = "first_col",
                         msg = "object does not have 'first_col' variable")
 
@@ -160,6 +285,11 @@
 }
 
 `.first_col<-` <- function(x, value) {
+
+    UseMethod(".first_col<-", x)
+}
+
+`.first_col<-.default` <- function(x, value) {
 
     .check_chr_contains(names(x), contains = "first_col",
                         msg = "object does not have 'first_col' variable")
@@ -170,6 +300,26 @@
     x[["first_col"]] <- value
     x
 }
+
+.crs1 <- function(x) .crs(x)[[1]]
+
+.xmin1 <- function(x) .xmin(x)[[1]]
+
+.xmax1 <- function(x) .xmax(x)[[1]]
+
+.ymin1 <- function(x) .ymax(x)[[1]]
+
+.ymax1 <- function(x) .ymax(x)[[1]]
+
+.nrows1 <- function(x) .nrows(x)[[1]]
+
+.ncols1 <- function(x) .ncols(x)[[1]]
+
+.xres1 <- function(x) .xres(x)[[1]]
+
+.yres1 <- function(x) .yres(x)[[1]]
+
+
 
 
 .check_file_info <- function(file_info) {
