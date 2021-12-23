@@ -952,3 +952,38 @@ NULL
 
     return(invisible(result))
 }
+
+#' @rdname check_functions
+#' @keywords internal
+.check_cube <- function(cube) {
+
+    .check_chr_contains(names(cube),
+                        contains = c("source", "collection", "satellite",
+                                     "sensor", "tile", "xmin", "xmax",
+                                     "ymin", "ymax", "crs"),
+                        msg = "invalid cube parameter")
+
+    .check_that(nrow(cube) > 0,
+                local_msg = "cube is empty",
+                msg = "invalid cube")
+
+    return(invisible(cube))
+}
+
+#' @rdname check_functions
+#' @keywords internal
+.check_file_info <- function(file_info) {
+
+    .check_chr_contains(names(file_info),
+                        contains = c("fid", "date", "band", "xres",
+                                     "yres", "xmin", "xmax", "ymin",
+                                     "ymax", "nrows", "ncols", "path"),
+                        msg = "invalid file_info parameter")
+
+    .check_that(nrow(file_info) > 0,
+                local_msg = "file_info is empty",
+                msg = "invalid file_info")
+
+    return(invisible(file_info))
+}
+

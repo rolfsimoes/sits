@@ -14,14 +14,6 @@ sits_apply(data, ...)
 \method{sits_apply}{raster_cube}(data, ..., impute_fn = sits_impute_linear(), output_dir = getwd())
 
 .apply_across(data, fn, ...)
-
-sits_apply(data, ...)
-
-\method{sits_apply}{sits}(data, ...)
-
-\method{sits_apply}{raster_cube}(data, ..., impute_fn = sits_impute_linear(), output_dir = getwd())
-
-.apply_across(data, fn, ...)
 }
 \arguments{
 \item{data}{Valid sits tibble or cube}
@@ -32,14 +24,8 @@ sits_apply(data, ...)
 }
 \value{
 A sits tibble or a sits cube with new bands.
-
-A sits tibble or a sits cube with new bands.
 }
 \description{
-Apply a named expression to a sits cube or a sits tibble
-to be evaluated and generate new bands (indices). In the case of sits
-cubes, it materializes a new band in `output_dir` using `gdalcubes`.
-
 Apply a named expression to a sits cube or a sits tibble
 to be evaluated and generate new bands (indices). In the case of sits
 cubes, it materializes a new band in `output_dir` using `gdalcubes`.
@@ -53,22 +39,8 @@ point2 <-
   sits_apply(NDVI_norm = (NDVI - min(NDVI)) / (max(NDVI) - min(NDVI))
 )
 
-# Get a time series
-# apply a normalization function
-
-point2 <-
-  sits_select(point_mt_6bands, "NDVI") \%>\%
-  sits_apply(NDVI_norm = (NDVI - min(NDVI)) / (max(NDVI) - min(NDVI))
-)
-
 }
 \author{
-Rolf Simoes, \email{rolf.simoes@inpe.br}
-
-Felipe Carvalho, \email{felipe.carvalho@inpe.br}
-
-Gilberto Camara, \email{gilberto.camara@inpe.br}
-
 Rolf Simoes, \email{rolf.simoes@inpe.br}
 
 Felipe Carvalho, \email{felipe.carvalho@inpe.br}

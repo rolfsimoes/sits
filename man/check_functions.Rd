@@ -24,6 +24,8 @@
 \alias{.check_env_var}
 \alias{.check_warn}
 \alias{.check_error}
+\alias{.check_cube}
+\alias{.check_file_info}
 \title{Check functions}
 \usage{
 .check_set_caller(caller)
@@ -127,6 +129,10 @@
 .check_warn(expr)
 
 .check_error(expr, ..., msg = NULL)
+
+.check_cube(cube)
+
+.check_file_info(file_info)
 }
 \arguments{
 \item{caller}{A \code{character} value with the caller name.}

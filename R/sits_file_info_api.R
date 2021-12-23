@@ -301,39 +301,60 @@
     x
 }
 
-.crs1 <- function(x) .crs(x)[[1]]
+.start_date <- function(x) {
 
-.xmin1 <- function(x) .xmin(x)[[1]]
-
-.xmax1 <- function(x) .xmax(x)[[1]]
-
-.ymin1 <- function(x) .ymax(x)[[1]]
-
-.ymax1 <- function(x) .ymax(x)[[1]]
-
-.nrows1 <- function(x) .nrows(x)[[1]]
-
-.ncols1 <- function(x) .ncols(x)[[1]]
-
-.xres1 <- function(x) .xres(x)[[1]]
-
-.yres1 <- function(x) .yres(x)[[1]]
-
-
-
-
-.check_file_info <- function(file_info) {
-
-    .check_chr_contains(names(file_info),
-                        contains = c("fid", "date", "band", "xres",
-                                     "yres", "xmin", "xmax", "ymin",
-                                     "ymax", "nrows", "ncols", "path"),
-                        msg = "invalid file_info parameter")
-
-    .check_that(nrow(file_info) > 0,
-                local_msg = "file_info is empty",
-                msg = "invalid file_info")
+    UseMethod(".start_date", x)
 }
+
+.start_date.default <- function(x) {
+
+    .check_chr_contains(names(x), contains = "start_date",
+                        msg = "object does not have 'start_date' variable")
+
+    date <- lubridate::as_date(x[["start_date"]])
+
+    .check_na(date, msg = "invalid date value")
+
+    date
+}
+
+.end_date <- function(x) {
+
+    UseMethod(".end_date", x)
+}
+
+.end_date.default <- function(x) {
+
+    .check_chr_contains(names(x), contains = "end_date",
+                        msg = "object does not have 'end_date' variable")
+
+    date <- lubridate::as_date(x[["end_date"]])
+
+    .check_na(date, msg = "invalid date value")
+
+    date
+}
+
+
+.crs_1 <- function(x) .crs(x)[[1]]
+
+.xmin_1 <- function(x) .xmin(x)[[1]]
+
+.xmax_1 <- function(x) .xmax(x)[[1]]
+
+.ymin_1 <- function(x) .ymax(x)[[1]]
+
+.ymax_1 <- function(x) .ymax(x)[[1]]
+
+.nrows_1 <- function(x) .nrows(x)[[1]]
+
+.ncols_1 <- function(x) .ncols(x)[[1]]
+
+.xres_1 <- function(x) .xres(x)[[1]]
+
+.yres_1 <- function(x) .yres(x)[[1]]
+
+
 
 .file_info <- function(tile, ...) {
 
