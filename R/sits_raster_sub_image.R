@@ -145,30 +145,26 @@
 
     # find the first row (remember that rows runs from top to bottom and
     # Y coordinates increase from bottom to top)
-    si[["first_row"]] <- unname(
-        floor((.ymax(cube) - .ymax(bbox)) / .yres(res))) + 1
+    si[["first_row"]] <- floor((.ymax(cube) - .ymax(bbox)) / .yres(res)) + 1
 
     # adjust to fit bbox in cube resolution
     .ymax(si) <- .ymax(cube) - .yres(res) * (si[["first_row"]] - 1)
 
     # find the first col (remember that rows runs from left to right and
     # X coordinates increase from left to right)
-    si[["first_col"]] <- unname(
-        floor((.xmin(bbox) - .xmin(cube)) / .xres(res))) + 1
+    si[["first_col"]] <- floor((.xmin(bbox) - .xmin(cube)) / .xres(res)) + 1
 
     # adjust to fit bbox in cube resolution
     .xmin(si) <- .xmin(cube) + .xres(res) * (si[["first_col"]] - 1)
 
     # find the number of rows (remember that rows runs from top to bottom and
     # Y coordinates increase from bottom to top)
-    .nrows(si) <- unname(
-        floor((.ymax(bbox) - .ymin(bbox)) / .yres(res))) + 1
+    .nrows(si) <- floor((.ymax(bbox) - .ymin(bbox)) / .yres(res)) + 1
 
     # adjust to fit bbox in cube resolution
     .ymin(si) <- .ymax(si) - .yres(res) * .nrows(si)
 
-    .ncols(si) <- unname(
-        floor((.xmax(bbox) - .xmin(bbox)) / .xres(res))) + 1
+    .ncols(si) <- floor((.xmax(bbox) - .xmin(bbox)) / .xres(res)) + 1
 
     # adjust to fit bbox in cube resolution
     .xmax(si) <- .xmin(si) + .xres(res) * .ncols(si)
