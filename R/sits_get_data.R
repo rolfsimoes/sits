@@ -150,8 +150,8 @@ sits_get_data.wtss_cube <- function(cube, file = NULL, ...,
         cube = cube,
         longitude = longitude,
         latitude = latitude,
-        start_date = start_end[["start_date"]],
-        end_date = start_end[["end_date"]],
+        start_date = .start_date(start_end),
+        end_date = .end_date(start_end),
         bands = bands,
         label = label,
         impute_fn = impute_fn
@@ -224,10 +224,10 @@ sits_get_data.csv_wtss_cube <- function(cube,
 
     # for each row of the input, retrieve the time series
     data <- purrr::pmap_dfr(
-        list(csv$longitude,
-             csv$latitude,
-             csv$start_date,
-             csv$end_date,
+        list(.lon(csv),
+             .lat(csv),
+             .start_date(csv),
+             .end_date(csv),
              csv$label),
         function(longitude, latitude, start_date, end_date, label) {
             row <- .sits_get_data_from_wtss(
@@ -277,10 +277,10 @@ sits_get_data.csv_satveg_cube <- function(cube, file, ...) {
     # for each row of the input, retrieve the time series
     data <- purrr::pmap_dfr(
         list(
-            csv$longitude,
-            csv$latitude,
-            csv$start_date,
-            csv$end_date,
+            .lon(csv),
+            .lat(csv),
+            .start_date(csv),
+            .end_date(csv),
             csv$label
         ),
         function(long, lat, st_date, en_date, lab) {
@@ -342,8 +342,8 @@ sits_get_data.shp_wtss_cube <- function(cube, file, ...,
     # for each row of the input, retrieve the time series
     data <- purrr::pmap_dfr(
         list(
-            points$longitude,
-            points$latitude,
+            .lon(points),
+            .lat(points),
             points$label
         ),
         function(long, lat, lab) {
@@ -400,8 +400,8 @@ sits_get_data.shp_satveg_cube <- function(cube, file, ...,
     # for each row of the input, retrieve the time series
     data <- purrr::pmap_dfr(
         list(
-            points$longitude,
-            points$latitude,
+            .lon(points),
+            .lat(points),
             points$label
         ),
         function(long, lat, lab) {
@@ -450,8 +450,8 @@ sits_get_data.raster_cube <- function(cube, file = NULL, ...,
         id = 1,
         longitude = longitude,
         latitude = latitude,
-        start_date = start_end[["start_date"]],
-        end_date = start_end[["end_date"]],
+        start_date = .start_date(start_end),
+        end_date = .end_date(start_end),
         label = label
     )
 
@@ -509,8 +509,8 @@ sits_get_data.csv_raster_cube <- function(cube, file, ...,
     .cube_bands_check(cube, bands = bands)
 
     # convert to date
-    csv$start_date <- lubridate::as_date(csv$start_date)
-    csv$end_date <- lubridate::as_date(csv$end_date)
+    .start_date(csv) <- .start_date(csv)
+    .end_date(csv) <- .end_date(csv)
 
     # is the cloud band available?
     cld_band <- .source_cloud()
@@ -582,8 +582,8 @@ sits_get_data.shp_raster_cube <- function(cube, file, ...,
     )
 
     # include the start and end dates
-    points$start_date <- start_end["start_date"]
-    points$end_date <- start_end["end_date"]
+    .start_date(points) <- .start_date(start_end)
+    .end_date(points) <- .end_date(start_end)
 
     # is the cloud band available?
     cld_band <- .source_cloud()

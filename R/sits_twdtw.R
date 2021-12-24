@@ -189,10 +189,9 @@ sits_twdtw_classify <- function(samples,
         purrr::map2(matches, seq_len(nrow(samples)),
             function(match, i) {
                 if (purrr::is_null(start_date)) {
-                    start_date <- lubridate::as_date(samples[i, ]$start_date)
-                    end_date <- lubridate::as_date(samples[i, ]$end_date)
-                    interval <- lubridate::as_date(end_date) -
-                        lubridate::as_date(start_date)
+                    start_date <- .start_date(samples)[[i]]
+                    end_date <- .end_date(samples)[[i]]
+                    interval <- end_date - start_date
                 }
                 # classify using the TWDTWclassify function
                 twdtw_obj <- dtwSat::twdtwClassify(

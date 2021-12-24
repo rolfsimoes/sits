@@ -347,7 +347,7 @@ NULL
 
     # check if the resolutions are unique
     res_cube.lst <- slider::slide(cube, function(tile){
-       return(unique(.cube_file_info(tile)[["xres"]]))
+       return(unique(.xres(.cube_file_info(tile))))
     })
 
     if (length(unique(unlist(res_cube.lst))) != 1)
@@ -355,7 +355,7 @@ NULL
 
     # check if the resolutions are unique
     res_cube.lst <- slider::slide(cube, function(tile){
-        return(unique(.cube_file_info(tile)[["yres"]]))
+        return(unique(.yres(.cube_file_info(tile))))
     })
 
     if (length(unique(unlist(res_cube.lst))) != 1)
@@ -512,8 +512,8 @@ NULL
         ymax       = .ymax(bbox),
         xres       = .xres(res),
         yres       = .yres(res),
-        nrows      = cube$file_info[[1]]$nrows[[1]],
-        ncols      = cube$file_info[[1]]$ncols[[1]],
+        nrows      = .nrows(cube$file_info[[1]])[[1]],
+        ncols      = .ncols(cube$file_info[[1]])[[1]],
         path       = file_name
     )
 

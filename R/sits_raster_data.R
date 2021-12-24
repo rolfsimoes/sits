@@ -244,8 +244,8 @@
 
     # get XY
     xy_tb <- .sits_proj_from_latlong(
-        longitude = points$longitude,
-        latitude  = points$latitude,
+        longitude = .lon(points),
+        latitude  = .lat(points),
         crs       = cube$crs
     )
 
@@ -272,12 +272,12 @@
         # get the valid timeline
         dates <- .sits_timeline_during(
             timeline   = timeline,
-            start_date = as.Date(point$start_date),
-            end_date   = as.Date(point$end_date)
+            start_date = .start_date(point),
+            end_date   = .end_date(point)
         )
         sample <- tibble::tibble(
-            longitude  = point[["longitude"]],
-            latitude   = point[["latitude"]],
+            longitude  = .lon(point),
+            latitude   = .lat(point),
             start_date = dates[[1]],
             end_date   = dates[[length(dates)]],
             label      = point[["label"]],
@@ -345,8 +345,8 @@
 
             t_point <- .sits_timeline_during(
                 timeline   = timeline,
-                start_date = lubridate::as_date(points$start_date[[i]]),
-                end_date   = lubridate::as_date(points$end_date[[i]])
+                start_date = .start_date(points)[[i]],
+                end_date   = .end_date(points)[[i]]
             )
 
             # select the valid dates in the timeline

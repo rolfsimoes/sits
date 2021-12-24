@@ -82,8 +82,8 @@ sits_show_prediction <- function(class) {
                 # what are the reference dates to do the classification?
                 ref_dates_lst <- .sits_timeline_match(
                     timeline = timeline_row,
-                    ref_start_date = lubridate::as_date(row$start_date),
-                    ref_end_date = lubridate::as_date(row$end_date),
+                    ref_start_date = .start_date(row),
+                    ref_end_date = .end_date(row),
                     num_samples = nrow(row$time_series[[1]])
                 )
             }

@@ -156,8 +156,8 @@ sits_time_series <- function(data) {
     # align the dates in the data
     data <- purrr::pmap_dfr(
         list(
-            data$longitude,
-            data$latitude,
+            .lon(data),
+            .lat(data),
             data$label,
             data$cube,
             data$time_series

@@ -84,8 +84,8 @@ sits_timeline.probs_cube <- function(data) {
     )
 
     # return the timeline of the cube
-    start_date <- lubridate::as_date(data$file_info[[1]]$start_date)
-    end_date <- lubridate::as_date(data$file_info[[1]]$end_date)
+    start_date <- .start_date(data$file_info[[1]])
+    end_date <- .end_date(data$file_info[[1]])
     timeline <- c(start_date, end_date)
     return(timeline)
 }
@@ -100,8 +100,8 @@ sits_timeline.classified_image <- function(data) {
     )
 
     # return the timeline of the cube
-    start_date <- lubridate::as_date(data$file_info[[1]]$start_date)
-    end_date <- lubridate::as_date(data$file_info[[1]]$end_date)
+    start_date <- .start_date(data$file_info[[1]])
+    end_date <- .end_date(data$file_info[[1]])
     timeline <- c(start_date, end_date)
     return(timeline)
 }
@@ -203,9 +203,9 @@ sits_timeline.classified_image <- function(data) {
     bands <- sits_bands(samples)
 
     # what is the reference start date?
-    ref_start_date <- lubridate::as_date(samples[1, ]$start_date)
+    ref_start_date <- .start_date(samples)[[1]]
     # what is the reference end date?
-    ref_end_date <- lubridate::as_date(samples[1, ]$end_date)
+    ref_end_date <- .end_date(samples)[[1]]
 
     # number of samples
     num_samples <- nrow(samples[1, ]$time_series[[1]])

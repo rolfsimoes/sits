@@ -516,7 +516,7 @@ plot.keras_model <- function(x, y, ...) {
     locs <- dplyr::distinct(data, longitude, latitude)
 
     plots <- purrr::pmap(
-        list(locs$longitude, locs$latitude),
+        list(.lon(locs), .lat(locs)),
         function(long, lat) {
             dplyr::filter(data, longitude == long, latitude == lat) %>%
                 .sits_plot_ggplot_series() %>%
@@ -710,7 +710,7 @@ plot.keras_model <- function(x, y, ...) {
 #' @return            The plot itself.
 .sits_plot_ggplot_series_no_na <- function(row) {
     # create the plot title
-    plot_title <- .sits_plot_title(row$latitude, row$longitude, row$label)
+    plot_title <- .sits_plot_title(.lat(row), .lon(row), row$label)
     #
     colors <- grDevices::hcl.colors(n = 20, palette = "Harmonic", alpha = 1, rev = TRUE)
     # extract the time series
@@ -754,7 +754,7 @@ plot.keras_model <- function(x, y, ...) {
         return(x)
     }
     # create the plot title
-    plot_title <- .sits_plot_title(row$latitude, row$longitude, row$label)
+    plot_title <- .sits_plot_title(.lat(row), .lon(row), row$label)
 
     # include a new band in the data to show the NAs
     data <- row$time_series[[1]]
@@ -871,7 +871,7 @@ plot.keras_model <- function(x, y, ...) {
     # put the time series in the data frame
     g_lst <- purrr::pmap(
         list(
-            data$latitude, data$longitude, data$label,
+            .lat(data), .lon(data), data$label,
             data$time_series, data$predicted
         ),
         function(row_lat, row_long, row_label,
