@@ -107,6 +107,7 @@ Collate:
     'sits_file_info_api.R'
     'sits_filters.R'
     'sits_gdalcubes.R'
+    'sits_generics.R'
     'sits_get_data.R'
     'sits_imputation.R'
     'sits_labels.R'
