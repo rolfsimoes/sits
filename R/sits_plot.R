@@ -170,25 +170,14 @@ plot.raster_cube <- function(x, ...,
         msg = "time parameter out of bounds"
     )
 
-    # verify sf package if roi is informed
-    if (!purrr::is_null(roi)) {
-        if (!requireNamespace("sf", quietly = TRUE)) {
-            stop("Please install package sf.", call. = FALSE)
-        }
+    # filter only intersecting tiles
+    intersects <- .cube_intersects(x, roi = roi)
 
-        # filter only intersecting tiles
-        intersects <- slider::slide(x, function(row) {
-            .sits_raster_sub_image_intersects(row, roi)
-        }) %>% unlist()
+    # check if intersection is not empty
+    .check_that(any(intersects),
+                msg = "informed roi does not intersect cube")
 
-        # check if intersection is not empty
-        .check_that(
-            x = any(intersects),
-            msg = "informed roi does not intersect cube"
-        )
-
-        x <- x[intersects, ]
-    }
+    x <- x[intersects, ]
 
     # plot only the selected tile
     # select only the bands for the timeline

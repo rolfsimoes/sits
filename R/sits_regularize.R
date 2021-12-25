@@ -190,16 +190,15 @@ sits_regularize <- function(cube,
         msg = "invalid 'multicores' parameter"
     )
 
-    if (!is.null(roi)) {
+    # filter only intersecting tiles
+    intersects <- .cube_intersects(cube, roi = roi)
 
-        # filter only intersecting tiles
-        intersects <- slider::slide_lgl(cube,
-                                        .sits_raster_sub_image_intersects,
-                                        roi)
+    # check if intersection is not empty
+    .check_that(any(intersects),
+                msg = "informed roi does not intersect cube")
 
-        # retrieve only intersecting tiles
-        cube <- cube[intersects, ]
-    }
+    # retrieve only intersecting tiles
+    cube <- cube[intersects, ]
 
     # timeline of intersection
     toi <- .gc_get_valid_interval(cube, period = period)
