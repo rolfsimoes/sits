@@ -1,24 +1,22 @@
-#' @title Get the bounding box of the data
+#' @title Bounding box (bbox)
 #'
 #' @name sits_bbox
 #'
 #' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
 #' @author Rolf Simoes, \email{rolf.simoes@@inpe.br}
 #'
-#' @description  Obtain a vector of limits (either on lat/long for time series
-#'               or in projection coordinates in the case of cubes)
+#' @description
+#' Get the bounding box of a given data.
 #'
-#' @param data      Valid sits tibble (time series or a cube).
-#' @param wgs84     Take effect only for data cubes.
-#'                  Reproject bbox to WGS84 (EPSG:4326).
-#' @param ...       Additional parameters (not implemented).
+#' @param data   valid sits tibble or sits cube objects (inherited from `tbl`).
+#' @param wgs84  reproject resulting bbox to EPSG:4326
+#' (take effect only for sits data cubes).
+#' @param ...    Additional parameters (not implemented).
 #'
-#' @return named vector with bounding box in WGS84 for time series and
-#'         on the cube projection for a data cube unless wgs84 parameter
-#'         is TRUE.
+#' @return return a `bbox` object (inherited from `tbl`) containing
+#' `("xmin", "xmax", "ymin", "ymax", "crs")` variables
 #'
 #' @export
-#'
 sits_bbox <- function(data, wgs84 = FALSE, ...) {
 
     .check_set_caller("sits_bbox")
@@ -29,189 +27,88 @@ sits_bbox <- function(data, wgs84 = FALSE, ...) {
     UseMethod("sits_bbox", data)
 }
 
+#' @rdname sits_bbox
+#' @description
+#' `sits_bbox.sits()`: obtain a bbox of time series limits (in EPSG:4326).
 #' @export
-#'
 sits_bbox.sits <- function(data, ...) {
 
     # is the data a valid set of time series
     .sits_tibble_test(data)
 
-    # get the max and min longitudes and latitudes
-    lon_max <- max(.lon(data))
-    lon_min <- min(.lon(data))
-    lat_max <- max(.lat(data))
-    lat_min <- min(.lat(data))
     # create and return the bounding box
-    bbox <- c(lon_min, lon_max, lat_min, lat_max)
-    names(bbox) <- c("lon_min", "lon_max", "lat_min", "lat_max")
+    bbox <- .bbox(data)
+
     return(bbox)
 }
 
+#' @rdname sits_bbox
+#' @description
+#' `sits_bbox.sits_cube()`: obtain a bbox of a data cube. If data cube have
+#' more than one crs the result will be converted to EPSG:4326
 #' @export
-#'
 sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
 
     # pre-condition
-    .cube_check(data)
+    .check_cube(data)
 
-    if (!wgs84)
-        .check_that(length(unique(data[["crs"]])) == 1,
-                    local_msg = "use `wgs84 = TRUE` for a global bbox",
-                    msg = "cube has more than one projection")
+    # get bbox
+    bbox <- .bbox(data)
 
-    # create and return the bounding box
-    bbox <- c(xmin = min(data[["xmin"]]),
-              xmax = max(data[["xmax"]]),
-              ymin = min(data[["ymin"]]),
-              ymax = max(data[["ymax"]]))
-
-    # convert to WGS84?
+    # convert to EPSG:4326?
     if (wgs84)
-        bbox <- .sits_coords_to_bbox(
-            xmin = bbox[["xmin"]],
-            xmax = bbox[["xmax"]],
-            ymin = bbox[["ymin"]],
-            ymax = bbox[["ymax"]],
-            crs = data[["crs"]][[1]])
+        bbox <- .bbox_transform(bbox, to_crs = "EPSG:4326")
+
+    # get cube bbox
+    bbox <- .bbox_outter(bbox)
 
     return(bbox)
 }
 
-.sits_coords_to_bbox <- function(xmin, xmax, ymin, ymax, crs) {
-
-    pt1 <- c(xmin, ymax)
-    pt2 <- c(xmax, ymax)
-    pt3 <- c(xmax, ymin)
-    pt4 <- c(xmin, ymin)
-
-    bbox <- sf::st_sfc(
-        sf::st_polygon(list(rbind(pt1, pt2, pt3, pt4, pt1))), crs = crs
-    )
-
-    # create a polygon and transform the proj
-    bbox_latlng <- sf::st_bbox(sf::st_transform(bbox, crs = 4326))
-
-    names(bbox_latlng) <- c("lon_min", "lat_min", "lon_max", "lat_max")
-
-    return(bbox_latlng)
-}
-
-#' @title Intersection between a bounding box and a cube
-#' @name .sits_bbox_intersect
+#' @title Bounding box (bbox)
+#'
+#' @name bbox_functions
+#'
 #' @keywords internal
-#' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
 #'
-#' @param bbox           bounding box for a region of interest
-#' @param cube           data cube
-#' @return               vector the bounding box intersection
+#' @description
+#' Bounding box functions
 #'
-.sits_bbox_intersect <- function(bbox, cube) {
-    bbox_out <- vector("double", length = 4)
-    names(bbox_out) <- c("xmin", "xmax", "ymin", "ymax")
+#' @param cube  a sits data cube object (inherited from `tbl`)
+#' @param bbox  a `bbox` object (inherited from `tbl`) containing
+#' `("xmin", "xmax", "ymin", "ymax", "crs")` variables
+#'
+NULL
 
-    if (.xmin(bbox) > .xmax(cube) | .xmax(bbox) < .xmin(cube) |
-        .ymin(bbox) > .ymax(cube) | .ymax(bbox) < .ymin(cube)) {
-        return(NULL)
-    }
+#' @rdname bbox_functions
+#' @description
+#' `.sits_bbox_intersection()`: compute intersection between a bbox and a
+#' `cube` object (inherited from `tbl`).
+#' @return
+#' `.sits_bbox_intersection():` a `bbox` object (inherited from `tbl`)
+.sits_bbox_intersection <- function(bbox, cube) {
 
-    if (.xmin(bbox) < .xmin(cube)) {
-        .xmin(bbox_out) <- .xmin(cube)
-    } else {
-        .xmin(bbox_out) <- .xmin(bbox)
-    }
+    # set caller to show in errors
+    .check_set_caller(".sits_bbox_intersection")
 
-    if (.xmax(bbox) > .xmax(cube)) {
-        .xmax(bbox_out) <- .xmax(cube)
-    } else {
-        .xmax(bbox_out) <- .xmax(bbox)
-    }
+    # this function should be called per tile
+    .check_cube(cube, is_tile = TRUE)
 
-    if (.ymin(bbox) < .ymin(cube)) {
-        .ymin(bbox_out) <- .ymin(cube)
-    } else {
-        .ymin(bbox_out) <- .ymin(bbox)
-    }
+    # compute intersection
+    bbox <- .bbox_intersection(bbox, bbox = .bbox(cube))
 
-    if (.ymax(bbox) > .ymax(cube)) {
-        .ymax(bbox_out) <- .ymax(cube)
-    } else {
-        .ymax(bbox_out) <- .ymax(bbox)
-    }
-
-    return(bbox_out)
+    return(bbox)
 }
 
-
-.roi_to_bbox <- function(x, crs = NULL) {
-
-    if (all(names(x) %in% c("xmin", "ymin", "xmax", "ymax")))
-        return(.bbox(x, default_crs = crs))
-
-
-    if (all(names(x) %in% c("lon_min", "lat_min", "lon_max", "lat_max"))) {
-
-        ll_names <- c("xmin", "ymin", "xmax", "ymax")
-        names(ll_names) <- c("lon_min", "lat_min", "lon_max", "lat_max")
-        names(x) <- unname(ll_names[names(x)])
-
-        return(.bbox(x, default_crs = "EPSG:4326"))
-    }
-
-    stop("invalid roi value", call. = FALSE)
-}
-
-.check_bbox <- function(x, same_crs = FALSE) {
-
-    .check_chr_contains(
-        names(x), contains = c("xmin", "xmax", "ymin", "ymax", "crs"),
-        msg = "object does not have all bbox variables")
-
-    .check_that(
-        length(.crs(x)) == length(.xmin(x)),
-        local_msg = "length of crs differs from xmin",
-        msg = "invalid bbox value")
-
-    .check_that(
-        length(.xmax(x)) == length(.xmin(x)),
-        local_msg = "length of xmax differs from xmin",
-        msg = "invalid bbox value")
-
-    .check_that(
-        length(.ymin(x)) == length(.xmin(x)),
-        local_msg = "length of ymin differs from xmin",
-        msg = "invalid bbox value")
-
-    .check_that(
-        length(.ymax(x)) == length(.xmin(x)),
-        local_msg = "length of ymax differs from xmin",
-        msg = "invalid bbox value")
-
-    .check_that(
-        all(.xmin(x) <= .xmax(x)),
-        local_msg = "xmin > xmax",
-        msg = "invalid bbox value")
-
-    .check_that(
-        all(.ymin(x) <= .ymax(x)),
-        local_msg = "ymin > ymax",
-        msg = "invalid bbox value")
-
-    if (same_crs)
-        .check_that(
-            all(.crs(x) == .crs_1(x)),
-            local_msg = "different crs in the bbox value",
-            msg = "invalid bbox value"
-        )
-
-    x
-}
-
-.bbox <- function(x, default_crs = NULL) {
+#' @keywords internal
+.bbox <- function(x, ...) {
 
     UseMethod(".bbox", x)
 }
 
-.bbox.default <- function(x, default_crs = NULL) {
+#' @keywords internal
+#' @export
+.bbox.default <- function(x, ..., default_crs = NULL) {
 
     if ("crs" %in% names(x))
         default_crs <- .crs(x)
@@ -235,11 +132,30 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     bbox
 }
 
+#' @keywords internal
+#' @export
+.bbox.sits <- function(x, ...) {
+
+    bbox <- tibble::tibble(
+        xmin = min(.lon(x)),
+        xmax = max(.lon(x)),
+        ymin = min(.lat(x)),
+        ymax = max(.lat(x)),
+        crs = "EPSG:4326")
+
+    .check_bbox(bbox)
+
+    bbox
+}
+
+#' @keywords internal
 `.bbox<-` <- function(x, value) {
 
     UseMethod(".bbox<-", x)
 }
 
+#' @keywords internal
+#' @export
 `.bbox<-.default` <- function(x, value) {
 
     .check_bbox(value)
@@ -257,24 +173,38 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     x
 }
 
+#' @keywords internal
 .bbox_inner <- function(x) {
+
+    UseMethod(".bbox_inner", x)
+}
+
+#' @keywords internal
+#' @export
+.bbox_inner.default <- function(x) {
 
     .check_bbox(x, same_crs = TRUE)
 
-    bbox <- tibble::tibble(
+    bbox <- .bbox(list(
         xmin = max(.xmin(x)),
         xmax = min(.xmax(x)),
         ymin = max(.ymin(x)),
         ymax = min(.ymax(x)),
-        crs = .crs_1(x))
-
-    .check_bbox(bbox)
+        crs = .crs_1(x)))
 
     bbox
 }
 
+#' @keywords internal
 .bbox_intersection <- function(x, bbox) {
 
+    UseMethod(".bbox_intersection", x)
+}
+
+#' @keywords internal
+#' @export
+.bbox_intersection.default <- function(x, bbox) {
+
     .check_bbox(x)
     .check_bbox(bbox)
 
@@ -282,20 +212,53 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
                 local_msg = "bbox should have length 1",
                 msg = "invalid bbox value")
 
-    bbox <- tibble::tibble(
-        xmin = pmax(.xmin(x), .xmin(bbox)),
-        xmax = pmin(.xmax(x), .xmax(bbox)),
-        ymin = pmax(.ymin(x), .ymin(bbox)),
-        ymax = pmin(.ymax(x), .ymax(bbox)),
-        crs = .crs_1(x)
-    )
+    # have all bbox the same crs?
+    if (.bbox_same_crs(x, y = bbox)) {
+
+        bbox <- .bbox(list(
+            xmin = pmax(.xmin(x), .xmin(bbox)),
+            xmax = pmin(.xmax(x), .xmax(bbox)),
+            ymin = pmax(.ymin(x), .ymin(bbox)),
+            ymax = pmin(.ymax(x), .ymax(bbox)),
+            crs = .crs_1(x)))
+
+        return(bbox)
+    }
+
+    # convert bbox to sfc
+    bbox_sfc <- .ext_as_sfc(.xmin(bbox), .xmax(bbox), .ymin(bbox),
+                            .ymax(bbox), .crs(bbox))
+
+    .intersection_ext <- function(xmin, xmax, ymin, ymax, crs) {
+
+        sfc <- .ext_as_sfc(xmin, xmax, ymin, ymax, crs)
+
+        bbox <- suppressWarnings(
+            tibble::as_tibble_row(c(sf::st_bbox(sf::st_intersection(
+                sf::st_transform(bbox_sfc, crs = crs), sfc)))))
+
+        .crs(bbox) <- crs
+
+        bbox
+    }
+
+    bbox <- purrr::pmap_dfr(.bbox(x), .intersection_ext)
 
     .check_bbox(bbox)
 
     bbox
 }
 
+#' @keywords internal
 .bbox_intersects <- function(x, bbox) {
+
+    UseMethod(".bbox_intersects", x)
+}
+
+
+#' @keywords internal
+#' @export
+.bbox_intersects.default <- function(x, bbox) {
 
     .check_bbox(x)
     .check_bbox(bbox)
@@ -304,12 +267,45 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
                 local_msg = "bbox should have length 1",
                 msg = "invalid bbox value")
 
-    intersects <- pmin(.xmax(x), .xmax(bbox)) <= pmax(.xmin(x), .xmin(bbox)) &
-        pmax(.ymin(x), .ymin(bbox)) <= pmin(.ymax(x), .ymax(bbox))
+    # have all bbox the same crs?
+    if (.bbox_same_crs(x, y = bbox)) {
+
+        intersects <-
+            pmax(.xmin(x), .xmin(bbox)) <= pmin(.xmax(x), .xmax(bbox)) &
+            pmax(.ymin(x), .ymin(bbox)) <= pmin(.ymax(x), .ymax(bbox))
+
+        return(intersects)
+    }
+
+    # convert bbox to sfc
+    bbox_sfc <- .ext_as_sfc(.xmin(bbox), .xmax(bbox), .ymin(bbox),
+                            .ymax(bbox), .crs(bbox))
+
+    .intersect_ext <- function(xmin, xmax, ymin, ymax, crs) {
+
+        sfc <- .ext_as_sfc(xmin, xmax, ymin, ymax, crs)
+
+        intersects <- suppressWarnings(
+            apply(sf::st_intersects(
+                sf::st_transform(bbox_sfc, crs = crs), sfc), 1, any))
+
+        intersects
+    }
+
+    intersects <- purrr::pmap_lgl(.bbox(x), .intersect_ext)
 
     intersects
 }
+
+#' @keywords internal
 .bbox_outter <- function(x) {
+
+    UseMethod(".bbox_outter", x)
+}
+
+#' @keywords internal
+#' @export
+.bbox_outter.default <- function(x) {
 
     .check_bbox(x)
 
@@ -319,14 +315,12 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
 
     .check_bbox(y, same_crs = TRUE)
 
-    bbox <- tibble::tibble(
+    bbox <- .bbox(list(
         xmin = min(.xmin(y)),
         xmax = max(.xmax(y)),
         ymin = min(.ymin(y)),
         ymax = max(.ymax(y)),
-        crs = .crs_1(y))
-
-    .check_bbox(bbox)
+        crs = .crs_1(y)))
 
     if (!.bbox_same_crs(x))
         warning(paste("bbox have different crs",
@@ -336,25 +330,40 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
     bbox
 }
 
-.bbox_same_crs <- function(x) {
+#' @keywords internal
+.bbox_same_crs <- function(x, y = NULL) {
 
-    all(.crs(x) == .crs_1(x))
+    UseMethod(".bbox_same_crs", x)
 }
 
+#' @keywords internal
+#' @export
+.bbox_same_crs.default <- function(x, y = NULL) {
 
+    .same_crs(.crs(x)) &&
+        (is.null(y) || (!is.null(y) && .same_crs(.crs(y)) &&
+                            .same_crs(.crs_1(x), .crs_1(y))))
+}
+
+#' @keywords internal
 .bbox_transform <- function(x, to_crs) {
+
+    UseMethod(".bbox_transform", x)
+}
+
+#' @keywords internal
+#' @export
+.bbox_transform.default <- function(x, to_crs) {
 
     .check_bbox(x)
 
-    .transform_extent <- function(xmin, xmax, ymin, ymax, crs, to_crs) {
+    # pre-condition
+    .check_length(to_crs, len_min = 1, len_max = 1,
+                  "invalid 'to_crs' parameter")
 
-        sfc <- sf::st_sfc(
-            sf::st_polygon(list(rbind(c(xmin, ymax),
-                                      c(xmax, ymax),
-                                      c(xmax, ymin),
-                                      c(xmin, ymin),
-                                      c(xmin, ymax)))),
-            crs = crs)
+    .transform_ext <- function(xmin, xmax, ymin, ymax, crs, to_crs) {
+
+        sfc <- .ext_as_sfc(xmin, xmax, ymin, ymax, crs)
 
         bbox <- suppressWarnings(
             tibble::as_tibble_row(c(sf::st_bbox(
@@ -365,8 +374,30 @@ sits_bbox.sits_cube <- function(data, wgs84 = FALSE, ...) {
         bbox
     }
 
-    bbox <- purrr::pmap_dfr(.bbox(x), .transform_extent, to_crs = to_crs)
+    bbox <- purrr::pmap_dfr(.bbox(x), .transform_ext, to_crs = to_crs)
+
+    .check_bbox(bbox)
 
     bbox
 }
 
+#' @keywords internal
+.ext_as_sfc <- function(xmin, xmax, ymin, ymax, crs) {
+
+    .check_package("sf")
+
+    sf::st_sfc(
+        sf::st_polygon(list(rbind(c(xmin[[1]], ymax[[1]]),
+                                  c(xmax[[1]], ymax[[1]]),
+                                  c(xmax[[1]], ymin[[1]]),
+                                  c(xmin[[1]], ymin[[1]]),
+                                  c(xmin[[1]], ymax[[1]])))),
+        crs = crs[[1]])
+}
+
+#' @keywords internal
+.same_crs <- function(crs1, crs2 = NULL) {
+    if (is.null(crs2))
+        return(all(crs1 == crs1[[1]]))
+    all(crs1 == crs2)
+}
