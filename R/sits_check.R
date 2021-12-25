@@ -955,19 +955,104 @@ NULL
 
 #' @rdname check_functions
 #' @keywords internal
-.check_cube <- function(cube) {
+.check_bbox <- function(x, same_crs = FALSE) {
 
-    .check_chr_contains(names(cube),
-                        contains = c("source", "collection", "satellite",
-                                     "sensor", "tile", "xmin", "xmax",
-                                     "ymin", "ymax", "crs"),
-                        msg = "invalid cube parameter")
+    .check_chr_contains(
+        names(x), contains = .config_get("bbox_cols"),
+        msg = "object does not have all bbox variables")
 
-    .check_that(nrow(cube) > 0,
-                local_msg = "cube is empty",
-                msg = "invalid cube")
+    .check_num(.xmin(x), msg = "invalid xmin value")
 
-    return(invisible(cube))
+    .check_num(.xmax(x), msg = "invalid xmax value")
+
+    .check_num(.ymin(x), msg = "invalid ymin value")
+
+    .check_num(.ymax(x), msg = "invalid ymax value")
+
+    .check_length(
+        length(.crs(x)) == length(.xmin(x)),
+        local_msg = "length of crs differs from xmin",
+        msg = "invalid bbox value")
+
+    .check_that(
+        length(.xmax(x)) == length(.xmin(x)),
+        local_msg = "length of xmax differs from xmin",
+        msg = "invalid bbox value")
+
+    .check_that(
+        length(.ymin(x)) == length(.xmin(x)),
+        local_msg = "length of ymin differs from xmin",
+        msg = "invalid bbox value")
+
+    .check_that(
+        length(.ymax(x)) == length(.xmin(x)),
+        local_msg = "length of ymax differs from xmin",
+        msg = "invalid bbox value")
+
+    .check_that(
+        all(.xmin(x) <= .xmax(x)),
+        local_msg = "xmin > xmax",
+        msg = "invalid bbox value")
+
+    .check_that(
+        all(.ymin(x) <= .ymax(x)),
+        local_msg = "ymin > ymax",
+        msg = "invalid bbox value")
+
+    if (same_crs)
+        .check_that(
+            .bbox_same_crs(x),
+            local_msg = "different crs in the bbox value",
+            msg = "invalid bbox value"
+        )
+
+    x
+}
+
+#' @rdname check_functions
+#' @keywords internal
+.check_cube <- function(data, is_tile = FALSE) {
+
+    .check_null(data, "invalid 'data' parameter")
+
+    .check_num(nrow(data), min = 1, msg = "invalid number of rows")
+
+    .check_chr_contains(
+        names(data),
+        contains = .config_get("sits_cube_cols"),
+        msg = "data is not a valid sits cube")
+
+    if (is_tile)
+        .check_num(nrow(data), min = 1, max = 1,
+                   msg = "invalid number of rows")
+
+    return(invisible(data))
+}
+
+#' @rdname check_functions
+#' @keywords internal
+.check_package <- function(package) {
+
+    .check_that(requireNamespace(package, quietly = TRUE),
+                local_msg = paste("please, install the", package,
+                                  "package and run this command again"),
+                msg = paste("this operation requires", package, "package"))
+}
+
+#' @rdname check_functions
+#' @keywords internal
+.check_samples <- function(data) {
+
+    .check_null(data, "invalid 'data' parameter")
+
+    .check_num(nrow(data), min = 1, msg = "invalid number of rows")
+
+    .check_chr_contains(
+        names(data),
+        contains = .config_get("sits_tibble_cols"),
+        msg = "data is not a valid sits tibble")
+
+    return(invisible(data))
 }
 
 #' @rdname check_functions
