@@ -9,16 +9,17 @@ sits_s3_classes :   ["sits", "patterns", "predicted", "sits_model",
 
 # mandatory columns in data cube description
 sits_cube_cols :    ["source", "collection", "satellite", "sensor",
-                    "tile", "bands", "xmin", "xmax", "ymin", "ymax",
-                    "crs", "labels"]
+                    "tile", "xmin", "xmax", "ymin", "ymax", "crs"]
 
 # mandatory columns in tibble description
 sits_tibble_cols :  ["longitude", "latitude", "start_date",
-                    "end_date", "label", "cube",
-                    "time_series"]
+                    "end_date", "label", "cube", "time_series"]
 
 # mandatory columns in predicted time series classification
 ts_predicted_cols:  ["from", "to", "class"]
+
+# mandatory columns in bbox
+bbox_cols :  ["xmin", "xmax", "ymin", "ymax", "crs"]
 
 # supported user sample file formats
 sample_file_formats : ["csv", "shp"]
