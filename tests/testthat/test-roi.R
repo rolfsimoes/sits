@@ -66,7 +66,8 @@ test_that("Bbox in WGS 84", {
     )
 
     bbox <- sits_bbox(sinop, wgs84 = TRUE)
-    expect_true(all(names(bbox) %in% c("lon_min", "lat_min", "lon_max", "lat_max")))
+    expect_true(all(.config_get("bbox_cols") %in% names(bbox)))
+
 })
 test_that("Functions that work with ROI", {
 
@@ -86,7 +87,7 @@ test_that("Functions that work with ROI", {
     # retrieve the bounding box for this ROI
     bbox_1 <- .sits_roi_bbox(roi, cube)
 
-    expect_true(length(.sits_bbox_intersect(bbox_1, cube)) == 4)
+    expect_true(length(.sits_bbox_intersection(bbox_1, cube)) == 5)
 
     # read a set of lat long coordinates
     csv_file <- system.file("extdata/samples/samples_sinop_crop.csv",
@@ -99,7 +100,7 @@ test_that("Functions that work with ROI", {
 
     # read a bbox as an sf object
     bbox_2 <- .sits_roi_bbox(sf_obj, cube)
-    expect_true(length(.sits_bbox_intersect(bbox_2, cube)) == 4)
+    expect_true(length(.sits_bbox_intersection(bbox_2, cube)) == 5)
 
     # extract the bounding box from a set of lat/long points
     sf_bbox <- sf::st_bbox(sf_obj)
@@ -107,7 +108,7 @@ test_that("Functions that work with ROI", {
     class(sf_bbox) <- c("vector")
     bbox_3 <- .sits_roi_bbox(sf_bbox, cube)
 
-    expect_true(length(.sits_bbox_intersect(bbox_3, cube)) == 4)
+    expect_true(length(.sits_bbox_intersection(bbox_3, cube)) == 5)
 })
 
 test_that("Internal functions in ROI", {
@@ -127,7 +128,7 @@ test_that("Internal functions in ROI", {
 
     roi["xmax"] <- roi["xmax"] - 2 * x_size
     roi["xmin"] <- roi["xmin"] - 2 * x_size
-    expect_null(.sits_bbox_intersect(roi, cube))
+    expect_error(.sits_bbox_intersection(roi, cube))
 
     bbox <- sits_bbox(cube)
     bbox["xmax"] <- bbox["xmax"] + x_size
@@ -135,7 +136,7 @@ test_that("Internal functions in ROI", {
     bbox["ymax"] <- bbox["ymax"] + x_size
     bbox["ymin"] <- bbox["ymin"] - x_size
 
-    int_bbox <- .sits_bbox_intersect(bbox, cube)
+    int_bbox <- .sits_bbox_intersection(bbox, cube)
     expect_true(all(int_bbox == sits_bbox(cube)))
 
     bb <- sits_bbox(cube)

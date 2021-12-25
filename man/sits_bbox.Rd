@@ -2,26 +2,35 @@
 % Please edit documentation in R/sits_bbox.R
 \name{sits_bbox}
 \alias{sits_bbox}
-\title{Get the bounding box of the data}
+\alias{sits_bbox.sits}
+\alias{sits_bbox.sits_cube}
+\title{Bounding box (bbox)}
 \usage{
 sits_bbox(data, wgs84 = FALSE, ...)
+
+\method{sits_bbox}{sits}(data, ...)
+
+\method{sits_bbox}{sits_cube}(data, wgs84 = FALSE, ...)
 }
 \arguments{
-\item{data}{Valid sits tibble (time series or a cube).}
+\item{data}{valid sits tibble or sits cube objects (inherited from `tbl`).}
 
-\item{wgs84}{Take effect only for data cubes.
-Reproject bbox to WGS84 (EPSG:4326).}
+\item{wgs84}{reproject resulting bbox to EPSG:4326
+(take effect only for sits data cubes).}
 
 \item{...}{Additional parameters (not implemented).}
 }
 \value{
-named vector with bounding box in WGS84 for time series and
-        on the cube projection for a data cube unless wgs84 parameter
-        is TRUE.
+return a `bbox` object (inherited from `tbl`) containing
+`("xmin", "xmax", "ymin", "ymax", "crs")` variables
 }
 \description{
-Obtain a vector of limits (either on lat/long for time series
-              or in projection coordinates in the case of cubes)
+Get the bounding box of a given data.
+
+`sits_bbox.sits()`: obtain a bbox of time series limits (in EPSG:4326).
+
+`sits_bbox.sits_cube()`: obtain a bbox of a data cube. If data cube have
+more than one crs the result will be converted to EPSG:4326
 }
 \author{
 Gilberto Camara, \email{gilberto.camara@inpe.br}

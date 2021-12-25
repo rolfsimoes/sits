@@ -151,7 +151,7 @@ test_that("Creating cubes from BDC", {
     expect_true(all(sits_bands(cbers_cube) %in%
                         c("NDVI", "EVI", "B13", "B14", "B15", "B16", "CLOUD")))
     bbox <- sits_bbox(cbers_cube)
-    int_bbox <- sits:::.sits_bbox_intersect(bbox, cbers_cube[1, ])
+    int_bbox <- sits:::.sits_bbox_intersection(bbox, cbers_cube[1, ])
     expect_true(all(int_bbox == sits_bbox(cbers_cube[1, ])))
 
     timeline <- sits_timeline(cbers_cube)
@@ -202,7 +202,7 @@ test_that("Creating cubes from BDC - based on ROI", {
     expect_lt(bbox["lat_min"], bbox_shp["ymin"])
     expect_lt(bbox["lon_min"], bbox_shp["xmin"])
 
-    expect_true(sits:::.sits_raster_sub_image_intersects(modis_cube, sf_bla))
+    expect_true(sits:::.cube_intersects(modis_cube, sf_bla))
 })
 
 test_that("Creating cubes from WTSS", {

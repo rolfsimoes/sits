@@ -12,6 +12,7 @@
 \alias{.cube_check}
 \alias{.cube_collection}
 \alias{.cube_has_cloud}
+\alias{.cube_intersects}
 \alias{.cube_is_regular}
 \alias{.cube_labels}
 \alias{.cube_resolution}
@@ -46,6 +47,8 @@
 
 .cube_has_cloud(cube)
 
+.cube_intersects(cube, roi = NULL)
+
 .cube_is_regular(cube)
 
 .cube_labels(cube)
@@ -75,6 +78,10 @@
 
 \item{bands}{Bands to be included.}
 
+\item{roi}{a vector containing either `("xmin", "xmax", "ymin", "ymax")`
+or `("lon_min", "lat_min", "lon_max", "lat_max")` variables, representing
+a spatial region of interest}
+
 \item{tile}{Tiles from the collection to be included in the data cube}
 
 \item{....}{Additional parameters to be included.}
@@ -82,9 +89,14 @@
 \value{
 a \code{vector} for get attributes functions and NULL or error for
 check parameters functions.
+
+for `.cube_intersects()`: a logical vector
 }
 \description{
 Auxiliary functions for extracting information from sits cubes.
+
+`.cube_intersects()`: inform which tiles of a given cube intersects
+a region of interest.
 
 verify is the cube is a regular one
 }

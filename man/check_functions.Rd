@@ -24,7 +24,10 @@
 \alias{.check_env_var}
 \alias{.check_warn}
 \alias{.check_error}
+\alias{.check_bbox}
 \alias{.check_cube}
+\alias{.check_package}
+\alias{.check_samples}
 \alias{.check_file_info}
 \title{Check functions}
 \usage{
@@ -130,7 +133,13 @@
 
 .check_error(expr, ..., msg = NULL)
 
-.check_cube(cube)
+.check_bbox(x, same_crs = FALSE)
+
+.check_cube(data, is_tile = FALSE)
+
+.check_package(package)
+
+.check_samples(data)
 
 .check_file_info(file_info)
 }
