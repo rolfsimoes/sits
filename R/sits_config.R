@@ -558,32 +558,30 @@ sits_list_collections <- function(source = NULL) {
 #' @return an error if the meta data type is wrong
 .config_data_meta_type <- function(data) {
 
-    # set caller to show in errors
-    .check_set_caller(".config_data_meta_type")
-
     # if the data is one of the classes recognized by sits
     if (inherits(data, .config_get("sits_s3_classes"))) {
         return(data)
 
     } else if (inherits(data, "tbl_df")) {
+
         # is this a data cube or a sits tibble?
-        if (all(.config_get("sits_cube_cols")
-                %in% colnames(data))) {
+        if (all(.config_get("sits_cube_cols") %in% names(data))) {
 
-            class(data) <- c("raster_cube", class(data))
-
+            class(data) <- unique(c("raster_cube", class(data)))
             return(data)
-        } else if (all(.config_get("sits_tibble_cols") %in% colnames(data))) {
 
-            class(data) <- c("sits", class(data))
+        } else if (all(.config_get("sits_tibble_cols") %in% names(data))) {
+
+            class(data) <- unique(c("sits", class(data)))
             return(data)
         }
     }
 
     .check_that(FALSE,
-                local_msg = "Data not recognized as a sits object",
+                local_msg = "data not recognized as a sits object",
                 msg = "invalid 'data' parameter")
 }
+
 #' @title Get local file extensions
 #' @name .config_local_file_extension
 #' @keywords internal
