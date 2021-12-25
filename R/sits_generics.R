@@ -34,7 +34,7 @@ NULL
 #' @description \code{.crs}: set \code{x[["crs"]] <- value}
 `.crs<-` <- function(x, value) {
 
-    UseMethod(".crs", x)
+    UseMethod(".crs<-", x)
 }
 
 #' @export
