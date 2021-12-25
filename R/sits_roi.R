@@ -1,75 +1,91 @@
-#' @title Find the bounding box for a spatial ROI in a data cube
-#' @name .sits_roi_bbox
+#' @title Region of interest (roi)
+#'
+#' @name roi_functions
+#'
 #' @keywords internal
-#' @param  cube            input data cube.
-#' @param  roi             spatial region of interest
-#' @return                 vector with information on the subimage
+#'
+#' @description
+#' Region of interest functions
+#'
+#' @param  cube  a sits data cube object (inherited from `tbl`)
+#' @param  roi   a vector containing either `("xmin", "xmax", "ymin", "ymax")`
+#' or `("lon_min", "lat_min", "lon_max", "lat_max")` variables, representing
+#' a spatial region of interest
+#'
+#' @return a `bbox` object (inherited from `tbl`)
+NULL
+
+#' @rdname roi_functions
+#' @description `.sits_roi_bbox()`: convert a given `roi` to a bbox with same
+#' crs as `cube` (that should have only one row). If no `roi` is given,
+#' returns the `cube`'s `bbox`.
 .sits_roi_bbox <- function(roi, cube) {
 
     # set caller to show in errors
     .check_set_caller(".sits_roi_bbox")
 
-    if (!(inherits(roi, "sf"))) {
+    # pre-condition
+    .check_cube(cube, is_tile = TRUE)
 
-        if (all(c("xmin", "xmax", "ymin", "ymax") %in% names(roi))) {
-            class(roi) <- c("xy", class(roi))
-        } else if (all(
-            c("lon_min", "lon_max", "lat_min", "lat_max") %in% names(roi))) {
-            class(roi) <- c("ll", class(roi))
-        }
-    }
+    if (is.null(roi))
+        return(.bbox(cube))
 
-    .check_that(
-        x = inherits(roi, c("sf", "xy", "ll")),
-        msg = "invalid definition of ROI"
-    )
-
-    UseMethod(".sits_roi_bbox", roi)
-}
-#' @title Find the bounding box for a spatial ROI defined as an sf object
-#' @name .sits_roi_bbox.sf
-#' @keywords internal
-#' @param  roi             spatial region of interest
-#' @param  cube            input data cube.
-#' @return                 vector with information on the subimage
-#' @export
-.sits_roi_bbox.sf <- function(roi, cube) {
-    bbox <- roi %>%
-        sf::st_transform(crs = cube$crs[[1]]) %>%
-        suppressWarnings() %>%
-        sf::st_bbox()
+    bbox <- .roi_to_bbox(roi, crs = .crs_1(cube))
 
     return(bbox)
 }
-#' @title Find the bounding box for a spatial ROI defined as a bounding box
-#' @name .sits_roi_bbox.xy
+
 #' @keywords internal
-#' @param  cube            input data cube.
-#' @param  roi             spatial region of interest
-#' @return                 vector with information on the subimage
-#' @export
-.sits_roi_bbox.xy <- function(roi, cube) {
-    return(roi)
+.roi_to_bbox <- function(x, crs = NULL) {
+
+    # pre-condition
+    .check_chr(crs, len_min = 1, len_max = 1, allow_null = TRUE,
+               msg = "invalid 'crs' parameter")
+
+    UseMethod(".roi_to_bbox", x)
 }
-#' @title Find the bounding box for a spatial ROI defined as a lat/lon box
-#' @name .sits_roi_bbox.ll
+
 #' @keywords internal
-#' @param  cube            input data cube.
-#' @param  roi             spatial region of interest
-#' @return                 vector with information on the subimage
 #' @export
-.sits_roi_bbox.ll <- function(roi, cube) {
-    # region of interest defined by two points
-    df <- data.frame(
-        lon = c(roi["lon_min"], roi["lon_max"], roi["lon_max"], roi["lon_min"]),
-        lat = c(roi["lat_min"], roi["lat_min"], roi["lat_max"], roi["lat_max"])
-    )
+.roi_to_bbox.sf <- function(x, crs = NULL) {
 
-    sf_region <- df %>%
-        sf::st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-        dplyr::summarise(geometry = sf::st_combine(geometry)) %>%
-        sf::st_cast("POLYGON")
+    .check_package("sf")
 
-    bbox <- sf::st_bbox(suppressWarnings(sf::st_transform(sf_region,
-                                                          crs = cube$crs[[1]])))
+    bbox <- tibble::as_tibble_row(c(sf::st_bbox(x)))
+
+    .crs(bbox) <- sf::st_crs(x)[["input"]]
+
+    if (is.null(crs))
+        return(bbox)
+
+    if (.same_crs(.crs(bbox), crs))
+        return(bbox)
+
+    .bbox_transform(bbox, to_crs = crs)
+}
+
+#' @keywords internal
+#' @export
+.roi_to_bbox.default <- function(x, crs = NULL) {
+
+    if (all(c("xmin", "xmax", "ymin", "ymax") %in% names(x)))
+        return(.bbox(x, default_crs = crs))
+
+
+    if (all(c("lon_min", "lon_max", "lat_min", "lat_max") %in% names(x))) {
+
+        ll_names <- c("xmin", "xmax", "ymin", "ymax")
+        names(ll_names) <- c("lon_min", "lon_max", "lat_min", "lat_max")
+        names(x) <- unname(ll_names[names(x)])
+
+        bbox <- .bbox(x, default_crs = "EPSG:4326")
+        return(bbox)
+    }
+
+    .check_that(FALSE,
+                local_msg = paste("value should contain either",
+                                  "('xmin', 'xmax', 'ymin', 'ymax') or",
+                                  "('lon_min', 'lon_max', 'lat_min',",
+                                  "'lat_max') variables"),
+                msg = "invalid roi value")
 }
