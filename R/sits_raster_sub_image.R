@@ -1,55 +1,3 @@
-#' @title Informs if a spatial ROI intersects a data cube
-#' @name .sits_raster_sub_image_intersects
-#' @keywords internal
-
-#' @param  cube            input data cube.
-#' @param  roi             spatial region of interest
-#' @return                 logical
-#'
-.sits_raster_sub_image_intersects <- function(cube, roi) {
-
-    # if roi is null, returns TRUE
-    if (purrr::is_null(roi)) return(TRUE)
-
-    # check if roi is a sf object
-    if (inherits(roi, "sf")) {
-
-        # check for roi crs
-        if (is.null(sf::st_crs(roi))) {
-            stop(".sits_raster_sub_image_intersects: invalid roi crs",
-                 call. = FALSE)
-        }
-
-        # reproject roi to cube crs
-        roi <- suppressWarnings(sf::st_transform(roi, cube$crs[[1]]))
-
-        # region of cube tile
-        df <- data.frame(
-            X = c(.xmin(cube)[[1]], .xmax(cube)[[1]],
-                  .xmax(cube)[[1]], .xmin(cube)[[1]]),
-            Y = c(.ymin(cube)[[1]], .ymin(cube)[[1]],
-                  .ymax(cube)[[1]], .ymax(cube)[[1]])
-        )
-
-        # compute tile polygon
-        sf_region <-
-            sf::st_as_sf(df, coords = c("X", "Y"), crs = cube$crs[[1]]) %>%
-            dplyr::summarise(geometry = sf::st_combine(geometry)) %>%
-            sf::st_cast("POLYGON") %>%
-            suppressWarnings()
-
-        # check for intersection
-        return(apply(sf::st_intersects(sf_region, roi), 1, any))
-    }
-
-    # if the ROI is defined, calculate the bounding box
-    bbox_roi <- .sits_roi_bbox(roi, cube)
-
-    # calculate the intersection between the bbox of the ROI and the cube
-    bbox_in <- .sits_bbox_intersect(bbox_roi, cube)
-
-    return(!purrr::is_null(bbox_in))
-}
 #' @title Find the dimensions and location of a spatial ROI in a data cube
 #' @name .sits_raster_sub_image
 #' @keywords internal
@@ -60,11 +8,14 @@
 #'
 .sits_raster_sub_image <- function(cube, roi) {
 
+    # set caller to show in errors
+    .check_set_caller(".sits_raster_sub_image")
+
     # if the ROI is defined, calculate the bounding box
-    bbox_roi <- .sits_roi_bbox(roi, cube)
+    bbox_roi <- .sits_roi_bbox(roi, cube = cube)
 
     # calculate the intersection between the bbox of the ROI and the cube
-    bbox_in <- .sits_bbox_intersect(bbox_roi, cube)
+    bbox_in <- .sits_bbox_intersection(bbox_roi, cube = cube)
 
     # return the sub_image
     sub_image <- .sits_raster_sub_image_from_bbox(bbox_in, cube)
