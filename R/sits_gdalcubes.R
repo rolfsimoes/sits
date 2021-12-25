@@ -126,10 +126,8 @@
     # set caller to show in errors
     .check_set_caller(".gc_create_cube_view")
 
-    bbox_roi <- sits_bbox(tile)
-
-    if (!is.null(roi))
-        bbox_roi <- .sits_roi_bbox(roi, tile)
+    # convert roi (if it exists) to a bbox
+    bbox_roi <- .sits_roi_bbox(roi, cube = tile)
 
     # create a list of cube view
     cv <- gdalcubes::cube_view(
