@@ -127,6 +127,9 @@
 #' @param cube  Data cube from where data is to be retrieved.
 #' @param tile  Tiles from the collection to be included in the data cube
 #' @param bands Bands to be included.
+#' @param roi   a vector containing either `("xmin", "xmax", "ymin", "ymax")`
+#' or `("lon_min", "lat_min", "lon_max", "lat_max")` variables, representing
+#' a spatial region of interest
 #' @param ....  Additional parameters to be included.
 #'
 #' @return a \code{vector} for get attributes functions and NULL or error for
@@ -334,6 +337,30 @@ NULL
 .cube_has_cloud <- function(cube) {
 
     .source_cloud() %in% .cube_bands(cube = cube, add_cloud = TRUE)
+}
+
+#' @rdname cube_functions
+#' @description
+#' `.cube_intersects()`: inform which tiles of a given cube intersects
+#' a region of interest.
+#' @return for `.cube_intersects()`: a logical vector
+.cube_intersects <- function(cube, roi = NULL) {
+
+    # set caller to show in errors
+    .check_set_caller(".cube_intersects")
+
+    # pre-condition
+    .check_cube(cube)
+
+    # if roi is null, returns TRUE
+    if (is.null(roi))
+        return(rep(TRUE, nrow(cube)))
+
+    # convert roi to bbox
+    bbox <- .roi_to_bbox(roi, crs = .crs_1(cube))
+
+    # compute if bbox intersects cube
+    .bbox_intersects(.bbox(cube), bbox = bbox)
 }
 
 #' @rdname cube_functions

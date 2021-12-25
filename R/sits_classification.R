@@ -215,8 +215,9 @@ sits_classify.raster_cube <- function(data, ml_model, ...,
 
     # precondition - test if cube is regular
     if (!.cube_is_regular(data))
-        stop("sits can only classify regular cubes. \n
-             Please use sits_regularize()")
+        .check_that(FALSE,
+                    local_msg = "please, use sits_regularize()",
+                    msg = "sits can only classify regular cubes")
 
     # precondition - multicores
     .check_num(x = multicores,
@@ -242,9 +243,11 @@ sits_classify.raster_cube <- function(data, ml_model, ...,
                msg = "invalid version")
 
     # filter only intersecting tiles
-    intersects <- slider::slide_lgl(data,
-                                    .sits_raster_sub_image_intersects,
-                                    roi)
+    intersects <- .cube_intersects(data, roi = roi)
+
+    # check if intersection is not empty
+    .check_that(any(intersects),
+                msg = "informed roi does not intersect cube")
 
     # retrieve only intersecting tiles
     data <- data[intersects, ]
