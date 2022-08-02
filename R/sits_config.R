@@ -1062,12 +1062,14 @@ sits_list_collections <- function(source = NULL) {
     labels <- unique(labels)
     # get the names of the colors in the chosen palette
     colors_palette <- unlist(.config_get(key = "colors"))
+    # do case-insensitive
+    names(colors_palette) <- tolower(names(colors_palette))
     # if labels are included in the config palette, use them
-    if (all(labels %in% names(colors_palette))) {
-        colors <- colors_palette[labels]
+    if (all(tolower(labels) %in% names(colors_palette))) {
+        colors <- colors_palette[tolower(labels)]
     } else {
-        labels_found <- labels[labels %in% names(colors_palette)]
-        if (length(labels_found) > round(length(labels) / 2)) {
+        labels_found <- labels[tolower(labels) %in% names(colors_palette)]
+        if (length(labels_found) >= round(length(labels) / 2)) {
             warning("Some labels are not available in the chosen palette",
                 call. = FALSE
             )
@@ -1087,13 +1089,26 @@ sits_list_collections <- function(source = NULL) {
 
         # get the number of labels
         n_labels <- length(unique(labels))
-        # generate a set of hcl colors
-        colors <- grDevices::hcl.colors(
-            n = n_labels,
-            palette = palette,
-            alpha = 1,
-            rev = rev
-        )
+
+        # check for single label
+        if (n_labels == 1) {
+            # generate a set of hcl color
+            colors <- grDevices::hcl.colors(
+                n = n_labels + 1,
+                palette = palette,
+                alpha = 1,
+                rev = rev
+            )[1]
+        } else {
+            # generate a set of hcl colors
+            colors <- grDevices::hcl.colors(
+                n = n_labels,
+                palette = palette,
+                alpha = 1,
+                rev = rev
+            )
+        }
+
         names(colors) <- labels
     }
     # post-condition

@@ -27,6 +27,11 @@
             length(bands) == 1,
             msg = "results cube should have only one band"
         )
+        .check_that(
+            x = length(labels) > 0,
+            local_msg = "please, provide a valid labels vector",
+            msg = "invalid labels parameter"
+        )
     }
     # is parse info NULL? use the default
     if (purrr::is_null(parse_info)) {
