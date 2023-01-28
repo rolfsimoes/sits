@@ -46,6 +46,44 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// reg_setup
+List reg_setup(int nrow, int ncol, NumericMatrix& avg);
+RcppExport SEXP _sits_reg_setup(SEXP nrowSEXP, SEXP ncolSEXP, SEXP avgSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< int >::type ncol(ncolSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix& >::type avg(avgSEXP);
+    rcpp_result_gen = Rcpp::wrap(reg_setup(nrow, ncol, avg));
+    return rcpp_result_gen;
+END_RCPP
+}
+// merge_best_neigh
+bool merge_best_neigh(List r, int px, double h);
+RcppExport SEXP _sits_merge_best_neigh(SEXP rSEXP, SEXP pxSEXP, SEXP hSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type r(rSEXP);
+    Rcpp::traits::input_parameter< int >::type px(pxSEXP);
+    Rcpp::traits::input_parameter< double >::type h(hSEXP);
+    rcpp_result_gen = Rcpp::wrap(merge_best_neigh(r, px, h));
+    return rcpp_result_gen;
+END_RCPP
+}
+// segment_region_growing
+void segment_region_growing(List r, double a, double h0);
+RcppExport SEXP _sits_segment_region_growing(SEXP rSEXP, SEXP aSEXP, SEXP h0SEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type a(aSEXP);
+    Rcpp::traits::input_parameter< double >::type h0(h0SEXP);
+    segment_region_growing(r, a, h0);
+    return R_NilValue;
+END_RCPP
+}
 // C_kernel_median
 NumericVector C_kernel_median(const NumericMatrix& x, int ncols, int nrows, int band, int window_size);
 RcppExport SEXP _sits_C_kernel_median(SEXP xSEXP, SEXP ncolsSEXP, SEXP nrowsSEXP, SEXP bandSEXP, SEXP window_sizeSEXP) {
@@ -418,6 +456,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_sits_average_probs", (DL_FUNC) &_sits_average_probs, 1},
     {"_sits_weighted_probs", (DL_FUNC) &_sits_weighted_probs, 2},
     {"_sits_weighted_uncert_probs", (DL_FUNC) &_sits_weighted_uncert_probs, 2},
+    {"_sits_reg_setup", (DL_FUNC) &_sits_reg_setup, 3},
+    {"_sits_merge_best_neigh", (DL_FUNC) &_sits_merge_best_neigh, 3},
+    {"_sits_segment_region_growing", (DL_FUNC) &_sits_segment_region_growing, 3},
     {"_sits_C_kernel_median", (DL_FUNC) &_sits_C_kernel_median, 5},
     {"_sits_C_kernel_sum", (DL_FUNC) &_sits_C_kernel_sum, 5},
     {"_sits_C_kernel_mean", (DL_FUNC) &_sits_C_kernel_mean, 5},

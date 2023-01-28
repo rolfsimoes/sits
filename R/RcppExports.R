@@ -13,6 +13,18 @@ weighted_uncert_probs <- function(data_lst, unc_lst) {
     .Call(`_sits_weighted_uncert_probs`, data_lst, unc_lst)
 }
 
+reg_setup <- function(nrow, ncol, avg) {
+    .Call(`_sits_reg_setup`, nrow, ncol, avg)
+}
+
+merge_best_neigh <- function(r, px, h) {
+    .Call(`_sits_merge_best_neigh`, r, px, h)
+}
+
+segment_region_growing <- function(r, a, h0) {
+    invisible(.Call(`_sits_segment_region_growing`, r, a, h0))
+}
+
 C_kernel_median <- function(x, ncols, nrows, band, window_size) {
     .Call(`_sits_C_kernel_median`, x, ncols, nrows, band, window_size)
 }
