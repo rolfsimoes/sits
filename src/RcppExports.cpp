@@ -47,40 +47,41 @@ BEGIN_RCPP
 END_RCPP
 }
 // reg_setup
-List reg_setup(int nrow, int ncol, NumericMatrix& avg);
-RcppExport SEXP _sits_reg_setup(SEXP nrowSEXP, SEXP ncolSEXP, SEXP avgSEXP) {
+List reg_setup(int nrow, int ncol, NumericMatrix x);
+RcppExport SEXP _sits_reg_setup(SEXP nrowSEXP, SEXP ncolSEXP, SEXP xSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type nrow(nrowSEXP);
     Rcpp::traits::input_parameter< int >::type ncol(ncolSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix& >::type avg(avgSEXP);
-    rcpp_result_gen = Rcpp::wrap(reg_setup(nrow, ncol, avg));
-    return rcpp_result_gen;
-END_RCPP
-}
-// merge_best_neigh
-bool merge_best_neigh(List r, int px, double h);
-RcppExport SEXP _sits_merge_best_neigh(SEXP rSEXP, SEXP pxSEXP, SEXP hSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type r(rSEXP);
-    Rcpp::traits::input_parameter< int >::type px(pxSEXP);
-    Rcpp::traits::input_parameter< double >::type h(hSEXP);
-    rcpp_result_gen = Rcpp::wrap(merge_best_neigh(r, px, h));
+    Rcpp::traits::input_parameter< NumericMatrix >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(reg_setup(nrow, ncol, x));
     return rcpp_result_gen;
 END_RCPP
 }
 // segment_region_growing
-void segment_region_growing(List r, double a, double h0);
-RcppExport SEXP _sits_segment_region_growing(SEXP rSEXP, SEXP aSEXP, SEXP h0SEXP) {
+void segment_region_growing(List& r, double a, double h0, int dt);
+RcppExport SEXP _sits_segment_region_growing(SEXP rSEXP, SEXP aSEXP, SEXP h0SEXP, SEXP dtSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type r(rSEXP);
+    Rcpp::traits::input_parameter< List& >::type r(rSEXP);
     Rcpp::traits::input_parameter< double >::type a(aSEXP);
     Rcpp::traits::input_parameter< double >::type h0(h0SEXP);
-    segment_region_growing(r, a, h0);
+    Rcpp::traits::input_parameter< int >::type dt(dtSEXP);
+    segment_region_growing(r, a, h0, dt);
+    return R_NilValue;
+END_RCPP
+}
+// segment_region_growing_pix
+void segment_region_growing_pix(List& r, double a, double h0, int dt);
+RcppExport SEXP _sits_segment_region_growing_pix(SEXP rSEXP, SEXP aSEXP, SEXP h0SEXP, SEXP dtSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List& >::type r(rSEXP);
+    Rcpp::traits::input_parameter< double >::type a(aSEXP);
+    Rcpp::traits::input_parameter< double >::type h0(h0SEXP);
+    Rcpp::traits::input_parameter< int >::type dt(dtSEXP);
+    segment_region_growing_pix(r, a, h0, dt);
     return R_NilValue;
 END_RCPP
 }
@@ -457,8 +458,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_sits_weighted_probs", (DL_FUNC) &_sits_weighted_probs, 2},
     {"_sits_weighted_uncert_probs", (DL_FUNC) &_sits_weighted_uncert_probs, 2},
     {"_sits_reg_setup", (DL_FUNC) &_sits_reg_setup, 3},
-    {"_sits_merge_best_neigh", (DL_FUNC) &_sits_merge_best_neigh, 3},
-    {"_sits_segment_region_growing", (DL_FUNC) &_sits_segment_region_growing, 3},
+    {"_sits_segment_region_growing", (DL_FUNC) &_sits_segment_region_growing, 4},
+    {"_sits_segment_region_growing_pix", (DL_FUNC) &_sits_segment_region_growing_pix, 4},
     {"_sits_C_kernel_median", (DL_FUNC) &_sits_C_kernel_median, 5},
     {"_sits_C_kernel_sum", (DL_FUNC) &_sits_C_kernel_sum, 5},
     {"_sits_C_kernel_mean", (DL_FUNC) &_sits_C_kernel_mean, 5},
