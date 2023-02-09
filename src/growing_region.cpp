@@ -14,8 +14,8 @@ struct Regions {
             stop("Invalid matrix dimentions");
         }
         for (int i = 0; i < size_; i++) {
-            area_.insert({i, {i}});
-            neigh_.insert({i, neighbors(i)});
+            area_.push_back({i});
+            neigh_.push_back(neighbors(i));
         }
     }
 
@@ -57,9 +57,10 @@ struct Regions {
     }
 
     void flat() {
-        for (auto r1 : area_) {
-            for (int r2 : r1.second) {
-                data_.row(r2) = data_.row(r1.first);
+        int size = area_.size();
+        for (int r1 = 0; r1 < size; r1++) {
+            for (int r2 : area_[r1]) {
+                data_.row(r2) = data_.row(r1);
             }
         }
     }
@@ -79,11 +80,11 @@ struct Regions {
         return(r_min);
     }
 
-    std::vector<int> merge_best_neighbors(double threshold) {
-        std::vector<int> merged;
-        for (auto region : neigh_) {
-            if (!region.second.size()) continue;
-            int r1 = region.first;
+    bool merge_best_neighbors(double threshold) {
+        bool merged = false;// [[Rcpp::export]]
+        int size = neigh_.size();
+        for (int r1 = 0; r1 < size; r1++) {
+            if (!neigh_[r1].size()) continue;
             int r2 = best_neigh(r1, threshold);
             // no best neighbor
             if (r2 < 0) continue;
@@ -92,15 +93,15 @@ struct Regions {
             if (r1_min != r1) continue;
             // merge them
             merge_regions(r1, r2);
-            merged.push_back(r2);
+            merged = true;
         }
         return(merged);
     };
 
     int nrow_, ncol_, size_;
     NumericMatrix data_;
-    std::map<int, std::set<int>> area_;
-    std::map<int, std::set<int>> neigh_;
+    std::vector<std::set<int>> area_;
+    std::vector<std::set<int>> neigh_;
 };
 
 // ---- accessors ----
@@ -149,11 +150,8 @@ void segment_region_growing(List& r, double a, double h0, int dt) {
     Regions reg(_avg(r), _nrow(r), _ncol(r));
     // update
     for (t = t0; t < t0 + dt; t++) {
-        std::vector<int> merged = reg.merge_best_neighbors(pow(a, t) * h0);
-        if (!merged.size()) break;
-        for (auto m : merged) {
-            reg.neigh_.erase(m);
-        }
+        bool merged = reg.merge_best_neighbors(pow(a, t) * h0);
+        if (!merged) break;
     }
     reg.flat();
     _avg(r) = reg.data_;
