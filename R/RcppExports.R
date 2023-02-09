@@ -21,10 +21,6 @@ segment_region_growing <- function(r, a, h0, dt) {
     invisible(.Call(`_sits_segment_region_growing`, r, a, h0, dt))
 }
 
-segment_region_growing_pix <- function(r, a, h0, dt) {
-    invisible(.Call(`_sits_segment_region_growing_pix`, r, a, h0, dt))
-}
-
 C_kernel_median <- function(x, ncols, nrows, band, window_size) {
     .Call(`_sits_C_kernel_median`, x, ncols, nrows, band, window_size)
 }

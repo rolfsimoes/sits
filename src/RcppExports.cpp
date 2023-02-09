@@ -72,19 +72,6 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// segment_region_growing_pix
-void segment_region_growing_pix(List& r, double a, double h0, int dt);
-RcppExport SEXP _sits_segment_region_growing_pix(SEXP rSEXP, SEXP aSEXP, SEXP h0SEXP, SEXP dtSEXP) {
-BEGIN_RCPP
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List& >::type r(rSEXP);
-    Rcpp::traits::input_parameter< double >::type a(aSEXP);
-    Rcpp::traits::input_parameter< double >::type h0(h0SEXP);
-    Rcpp::traits::input_parameter< int >::type dt(dtSEXP);
-    segment_region_growing_pix(r, a, h0, dt);
-    return R_NilValue;
-END_RCPP
-}
 // C_kernel_median
 NumericVector C_kernel_median(const NumericMatrix& x, int ncols, int nrows, int band, int window_size);
 RcppExport SEXP _sits_C_kernel_median(SEXP xSEXP, SEXP ncolsSEXP, SEXP nrowsSEXP, SEXP bandSEXP, SEXP window_sizeSEXP) {
@@ -459,7 +446,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_sits_weighted_uncert_probs", (DL_FUNC) &_sits_weighted_uncert_probs, 2},
     {"_sits_reg_setup", (DL_FUNC) &_sits_reg_setup, 3},
     {"_sits_segment_region_growing", (DL_FUNC) &_sits_segment_region_growing, 4},
-    {"_sits_segment_region_growing_pix", (DL_FUNC) &_sits_segment_region_growing_pix, 4},
     {"_sits_C_kernel_median", (DL_FUNC) &_sits_C_kernel_median, 5},
     {"_sits_C_kernel_sum", (DL_FUNC) &_sits_C_kernel_sum, 5},
     {"_sits_C_kernel_mean", (DL_FUNC) &_sits_C_kernel_mean, 5},
