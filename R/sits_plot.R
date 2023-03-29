@@ -1414,8 +1414,8 @@ plot.class_cube <- function(x, y, ...,
     # set the options for tmap
     tmap::tmap_options(max.raster = max_raster)
     # numbers of nrows and ncols
-    nrows <- .tile_nrows(tile)
-    ncols <- .tile_ncols(tile)
+    nrows <- max(.tile_nrows(tile))
+    ncols <- max(.tile_ncols(tile))
 
     # do we need to compress?
     ratio <- max((nrows * ncols / max_cells), 1)

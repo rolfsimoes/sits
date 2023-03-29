@@ -2,6 +2,9 @@
 
 # What's new in SITS version 1.3.0
 
+### Hotfix version 1.3.0-1
+* Fix `plot()` bug of irregular cubes (issue #940)
+
 ### New features in SITS version 1.3.0
 * Remove NOTES and WARNINGS pointed out by CRAN
 * New `sits_mosaic()` function for improving visualization of large data sets
