@@ -195,8 +195,11 @@
 #' @param base_files   Files to be copied from (with path)
 #' @param multicores   Number of cores to be used in parallel
 #' @param roi          ROI to crop base_files
+#' @param resampling   Resampling method passed to gdalwarp's `-r` (default
+#'                      "near"; e.g. "cubicspline" for continuous bands)
 #' @returns            Name of file that was written to
-.gdal_merge_into <- function(file, base_files, multicores, roi = NULL) {
+.gdal_merge_into <- function(file, base_files, multicores, roi = NULL,
+                             resampling = "near") {
     rast <- .raster_open_rast(file)
     # Merge src_files
     file <- .try(
@@ -216,6 +219,7 @@
                     params = list(
                         "-wo" = paste0("NUM_THREADS=", multicores),
                         "-multi" = TRUE,
+                        "-r" = resampling,
                         "-cutline" = roi_file,
                         "-q" = TRUE,
                         "-overwrite" = FALSE
@@ -229,6 +233,7 @@
                     params = list(
                         "-wo" = paste0("NUM_THREADS=", multicores),
                         "-multi" = FALSE,
+                        "-r" = resampling,
                         "-q" = TRUE,
                         "-overwrite" = FALSE
                     ),
