@@ -561,9 +561,20 @@
     if (force_cpu == "TRUE") {
         return(FALSE)
     }
-    torch::cuda_is_available() || torch::backends_mps_is_available()
+    torch::cuda_is_available() ||
+        .torch_xpu_enabled() ||
+        torch::backends_mps_is_available()
 }
-
+#' @title Verify if XPU is available
+#' @name .torch_xpu_enabled
+#' @keywords internal
+#' @noRd
+.torch_xpu_enabled <- function() {
+    if (!"xpu_is_available" %in% getNamespaceExports("torch")) {
+        return(FALSE)
+    }
+    getExportedValue("torch", "xpu_is_available")()
+}
 #' @title Verify if CUDA is available
 #' @name .torch_cuda_enabled
 #' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
@@ -590,6 +601,7 @@
 #' @return TRUE/FALSE
 .torch_cpu_train <- function() {
     !(torch::cuda_is_available()) &&
+        !(.torch_xpu_enabled()) &&
         !(torch::backends_mps_is_available())
 }
 
@@ -634,6 +646,8 @@
     torch_model <- .ml_model(ml_model)
     if (torch::cuda_is_available()) {
         torch_model$model <- torch_model$model$to(device = "cuda")
+    } else if (.torch_xpu_enabled()) {
+        torch_model$model <- torch_model$model$to(device = "xpu")
     } else if (torch::backends_mps_is_available()) {
         torch_model$model <- torch_model$model$to(device = "mps")
     }
