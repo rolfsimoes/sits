@@ -186,6 +186,28 @@
     # Return file
     file
 }
+#' @title Burn a vector layer into an existing raster (gdal_rasterize)
+#' @author Rolf Simoes, \email{rolfsimoes@@gmail.com}
+#' @noRd
+#' @param file    Path of an existing destination raster defining the
+#'                target geotransform, size, and CRS.
+#' @param vector  Path to a vector file readable by OGR.
+#' @param field   Attribute field to burn. A literal field on `vector`, or
+#'                (when `sql` is given) a column `sql` projects.
+#' @param sql     Optional OGR SQL SELECT statement selecting or deriving
+#'                the features and fields `field` is read from.
+#' @returns       `file`, invisibly.
+.gdal_rasterize_into <- function(file, vector, field, sql = NULL) {
+    params <- list("-a" = field)
+    if (.has(sql)) {
+        params <- c(params, list("-sql" = sql))
+    }
+    sf::gdal_utils(
+        util = "rasterize", source = vector, destination = file,
+        options = .gdal_params(params), quiet = TRUE
+    )
+    invisible(file)
+}
 #' @title Merge files into a single file
 #' @author Rolf Simoes, \email{rolfsimoes@@gmail.com}
 #' @author Felipe Carvalho, \email{felipe.carvalho@@inpe.br}
