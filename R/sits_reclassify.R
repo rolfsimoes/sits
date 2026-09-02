@@ -32,6 +32,11 @@
 #' @param exclude_mask_na Should cube pixels be set to \code{NA} when \code{NA}
 #'                    values are found in mask pixels? (logical, default TRUE).
 #'                    Used only for \code{"class_cube"}.
+#' @param resampling  Resampling method used to align \code{mask} onto
+#'                    \code{cube}'s grid when the two differ (default "near";
+#'                    e.g. "mode" for a mask whose class boundaries should
+#'                    follow a majority vote rather than the nearest pixel).
+#'                    Used only for \code{"class_cube"}.
 #' @param memsize     Memory available for processing in GB
 #'                    (integer, min = 1, max = 16384).
 #' @param multicores  Number of cores to be used for processing
@@ -177,6 +182,7 @@ sits_reclassify.class_cube <- function(cube, ...,
                                        mask = NULL,
                                        rules,
                                        exclude_mask_na = TRUE,
+                                       resampling = "near",
                                        memsize = 4L,
                                        multicores = 2L,
                                        output_dir,
@@ -254,6 +260,7 @@ sits_reclassify.class_cube <- function(cube, ...,
             band = "class",
             labels = cube_labels,
             reclassify_fn = reclassify_fn,
+            resampling = resampling,
             block = block,
             multicores = multicores,
             memsize = memsize,

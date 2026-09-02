@@ -15,6 +15,7 @@ sits_reclassify(cube, ...)
   mask = NULL,
   rules,
   exclude_mask_na = TRUE,
+  resampling = "near",
   memsize = 4L,
   multicores = 2L,
   output_dir,
@@ -56,6 +57,12 @@ produce the new label given by the rule name.}
 
 \item{exclude_mask_na}{Should cube pixels be set to \code{NA} when \code{NA}
 values are found in mask pixels? (logical, default TRUE).
+Used only for \code{"class_cube"}.}
+
+\item{resampling}{Resampling method used to align \code{mask} onto
+\code{cube}'s grid when the two differ (default "near";
+e.g. "mode" for a mask whose class boundaries should
+follow a majority vote rather than the nearest pixel).
 Used only for \code{"class_cube"}.}
 
 \item{memsize}{Memory available for processing in GB

@@ -219,6 +219,12 @@
 #' @param roi          ROI to crop base_files
 #' @param resampling   Resampling method passed to gdalwarp's `-r` (default
 #'                      "near"; e.g. "cubicspline" for continuous bands)
+#' @details
+#' Always passes `-et 0` (exact coordinate transformation).
+#' This function is called once per block by the parallel workers.
+#' gdalwarp's default *approximate* transformer is rebuilt per read window,
+#' so without `-et 0` the same source pixel can warp to a different value
+#' depending on which block asked for it.
 #' @returns            Name of file that was written to
 .gdal_merge_into <- function(file, base_files, multicores, roi = NULL,
                              resampling = "near") {
@@ -242,6 +248,7 @@
                         "-wo" = paste0("NUM_THREADS=", multicores),
                         "-multi" = TRUE,
                         "-r" = resampling,
+                        "-et" = 0,
                         "-cutline" = roi_file,
                         "-q" = TRUE,
                         "-overwrite" = FALSE
@@ -256,6 +263,7 @@
                         "-wo" = paste0("NUM_THREADS=", multicores),
                         "-multi" = FALSE,
                         "-r" = resampling,
+                        "-et" = 0,
                         "-q" = TRUE,
                         "-overwrite" = FALSE
                     ),
