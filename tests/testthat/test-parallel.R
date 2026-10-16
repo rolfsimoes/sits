@@ -48,3 +48,38 @@ test_that("sits_parallel lifecycle and checks", {
     # ---- Cleanup ----
     sits_parallel(workers = 0)
 })
+test_that("parallel tasks draw from the substream of their index", {
+    # expected values computed outside sits (see test-rng.R)
+    expected <- list(
+        c(0.07939898979733463, 0.4803395047575741),
+        c(0.2619834061461847, 0.5359922918692224),
+        c(0.5032122888761005, 0.16517391832456343)
+    )
+    old <- RNGkind()
+    on.exit(do.call(RNGkind, as.list(old)), add = TRUE)
+    run <- function(workers) {
+        sits_parallel(workers = 0L)
+        if (workers > 1L) {
+            sits_parallel(workers = workers)
+        }
+        on.exit(sits_parallel(workers = 0L), add = TRUE)
+        RNGkind("L'Ecuyer-CMRG")
+        assign(".Random.seed", c(10407L, rep(12345L, 6L)), envir = globalenv())
+        sits:::.parallel_map(list(1L, 2L, 3L), function(i) stats::runif(2L))
+    }
+    for (workers in c(1L, 2L, 3L)) {
+        expect_equal(run(workers), expected, tolerance = 1e-15)
+    }
+    # the caller goes on past the substreams of the tasks
+    second <- sits:::.parallel_map(list(1L, 2L, 3L), function(i) stats::runif(2L))
+    expect_false(any(unlist(second) %in% unlist(expected)))
+    # another global generator comes back after the map
+    set.seed(4L, kind = "Mersenne-Twister")
+    a <- sits:::.parallel_map(list(1L, 2L), function(i) stats::runif(1L))
+    expect_identical(RNGkind()[[1L]], "Mersenne-Twister")
+    set.seed(4L, kind = "Mersenne-Twister")
+    expect_identical(
+        sits:::.parallel_map(list(1L, 2L), function(i) stats::runif(1L)), a
+    )
+    expect_false(identical(a[[1L]], a[[2L]]))
+})

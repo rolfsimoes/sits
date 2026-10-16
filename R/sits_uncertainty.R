@@ -301,6 +301,9 @@ sits_uncertainty_sampling <- function(uncert_cube,
     # The following functions define optimal parameters for parallel processing
     # Get block size
     block <- .raster_file_blocksize(.raster_open_rast(.tile_path(uncert_cube)))
+    # The draw is made per chunk: chunks sized by memsize and multicores
+    # would change the result
+    block <- .jobs_draw_block(block, .tile_size(.tile(uncert_cube)))
     # Overlapping pixels (no overlap for uncertainty sampling)
     overlap <- 0L
     # Check minimum memory needed to process one block
@@ -313,14 +316,6 @@ sits_uncertainty_sampling <- function(uncert_cube,
     # Update multicores parameter
     multicores <- .jobs_max_multicores(
         job_block_memsize = job_block_memsize,
-        memsize = memsize,
-        multicores = multicores
-    )
-    # Update block parameter
-    block <- .jobs_optimal_block(
-        job_block_memsize = job_block_memsize,
-        block = block,
-        image_size = .tile_size(.tile(uncert_cube)),
         memsize = memsize,
         multicores = multicores
     )

@@ -113,3 +113,24 @@ test_that("Tuning - random search", {
 
     Sys.unsetenv("OMP_NUM_THREADS")
 })
+test_that("tuning with seed does not depend on multicores", {
+    run <- function(multicores) {
+        sits_tuning(
+            samples_modis_ndvi,
+            ml_method = sits_mlp(),
+            params = sits_tuning_hparams(
+                epochs = 3L,
+                optimizer = torch::optim_adam,
+                opt_hparams = list(lr = loguniform(0.01, 0.0001))
+            ),
+            trials = 2L,
+            multicores = multicores,
+            seed = 9L,
+            progress = FALSE
+        )
+    }
+    a <- run(multicores = 1L)
+    b <- run(multicores = 2L)
+    expect_equal(b[["accuracy"]], a[["accuracy"]])
+    expect_equal(b[["kappa"]], a[["kappa"]])
+})
