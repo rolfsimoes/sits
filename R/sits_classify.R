@@ -359,7 +359,12 @@ sits_classify.raster_cube <- function(data,
     .check_int_parameter(gpu_memory, min = 1L)
     .check_batch_size(batch_size)
     .check_block_size(block_size, data)
-    .check_output_dir(output_dir)
+    # a stack writes each model to its own dir
+    if (inherits(ml_model, "stack_model")) {
+        output_dir <- .stack_output_dir(output_dir, ml_model)
+    } else {
+        .check_output_dir(output_dir)
+    }
     # preconditions - impute and filter functions
     .check_function(impute_fn)
     # version is case-insensitive in sits
@@ -463,7 +468,7 @@ sits_classify.raster_cube <- function(data,
         workers = multicores,
         export_vars = "ml_model",
         log = verbose,
-        output_dir = output_dir
+        output_dir = output_dir[[1L]]
     )
     on.exit(.parallel_stop(
         started = started,
@@ -481,28 +486,20 @@ sits_classify.raster_cube <- function(data,
         on.exit(.ml_gpu_clean(ml_model), add = TRUE)
     }
     # Process each tile sequentially
-    cube_probs <- .cube_foreach_tile(data, function(tile) {
-        # Define the name of the output file
-        out_file <- .file_derived_name(
+    classify_tile <- function(tile) {
+        # Define the name of the output file (one per model of a stack)
+        out_file <- .classify_out_file(
             tile = tile,
-            band = "probs",
+            ml_model = ml_model,
             version = version,
             output_dir = output_dir
         )
         # If output file exists, builds a
         # probability cube directly from the file
         # and does not reprocess input
-        if (file.exists(out_file)) {
+        if (all(file.exists(out_file))) {
             .check_recovery()
-            probs_tile <- .tile_derived_from_file(
-                file = out_file,
-                band = "probs",
-                base_tile = tile,
-                labels = .ml_labels_code(ml_model),
-                derived_class = "probs_cube",
-                update_bbox = TRUE
-            )
-            return(probs_tile)
+            return(.classify_tile_from_files(out_file, tile, ml_model))
         }
         # Classify the tile using the raster workflow (CPU or GPU)
         if (.torch_gpu_classification() && .ml_is_torch_model(ml_model)) {
@@ -517,7 +514,7 @@ sits_classify.raster_cube <- function(data,
                 roi = roi,
                 exclusion_mask = exclusion_mask,
                 impute_fn = impute_fn,
-                output_dir = output_dir,
+                output_dir = output_dir[[1L]],
                 version = version,
                 verbose = verbose,
                 progress = progress
@@ -534,14 +531,21 @@ sits_classify.raster_cube <- function(data,
                 roi = roi,
                 exclusion_mask = exclusion_mask,
                 impute_fn = impute_fn,
-                output_dir = output_dir,
+                output_dir = output_dir[[1L]],
                 version = version,
                 verbose = verbose,
                 progress = progress
             )
         }
+    }
+    if (!inherits(ml_model, "stack_model")) {
+        return(.cube_foreach_tile(data, classify_tile))
+    }
+    # a stack gives one probs cube per model
+    tiles <- slider::slide(data, classify_tile)
+    lapply(stats::setNames(nm = names(output_dir)), function(name) {
+        .map_dfr(tiles, function(tile) tile[[name]])
     })
-    cube_probs
 }
 #' @title   Classify a segmented data cube
 #' @name sits_classify.vector_cube

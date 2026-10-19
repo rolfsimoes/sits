@@ -11,16 +11,17 @@ sits_stack_model(...)
 (trained by \code{\link[sits]{sits_train}}).}
 }
 \value{
-A model to be used by \code{\link[sits]{sits_classify}}.
+A model to be used by \code{\link[sits]{sits_classify}}, whose
+  \code{output_dir} is one directory, or one per model, named by model.
 }
 \description{
 Takes named torch models trained on the same bands and
 timeline and returns one model. \code{\link[sits]{sits_classify}} with
 it reads each block of the cube once and runs every model on it, each
-with its own normalization statistics and its own softmax. The
-probability cube has the labels of all models, as \code{name:label};
-\code{\link[sits]{sits_stack_split}} writes one probability cube per
-model.
+with its own normalization statistics and its own softmax. Each
+model writes its own probability file, whose version is the model name,
+to its own \code{output_dir}; \code{sits_classify} returns a named list
+of probability cubes, one per model.
 }
 \examples{
 if (sits_run_examples()) {
@@ -37,7 +38,7 @@ if (sits_run_examples()) {
         data_dir = system.file("extdata/raster/mod13q1", package = "sits")
     )
     probs <- sits_classify(cube, ml_model = stack, output_dir = tempdir())
-    probs_ab <- sits_stack_split(probs, output_dir = tempdir())
+    probs[["a"]]
 }
 }
 \author{

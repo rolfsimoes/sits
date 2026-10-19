@@ -546,7 +546,8 @@
                 block = block,
                 output_dir = self$output_dir,
                 out_file = self$out_file,
-                out_band = self$out_band
+                out_band = self$out_band,
+                ml_model = self$ml_model
             )
             # Replace accumulated tensor with the block file path
             ctx$pred[[length(ctx$pred)]] <- block_file

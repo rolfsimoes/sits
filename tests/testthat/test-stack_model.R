@@ -87,78 +87,69 @@ test_that("sits_stack_model checks the models and names the labels", {
     expect_error(sits_stack_model(a = models[["a"]], o = other))
 })
 
-test_that("a stack gives each model its own probs, on both paths", {
+# Every .tif directly in a dir, and its number of bands
+tifs_in <- function(dir) {
+    files <- list.files(dir, pattern = "\\.tif$", full.names = TRUE)
+    vapply(files, function(f) as.integer(.raster_nlayers(.raster_open_rast(f))), integer(1L))
+}
+
+test_that("a stack writes each model's probs to its own dir, on every path", {
     skip_on_cran()
     skip_if_not_installed("torch")
     skip_if_not_installed("luz")
     models <- stack_test_models()
     stack <- sits_stack_model(a = models[["a"]], b = models[["b"]])
     cube <- stack_test_cube()
-    n_a <- length(.ml_labels(models[["a"]]))
     for (path in c("cpu", "workers", "dataloader")) {
-        dir <- file.path(tempdir(), paste0("stack_", path))
-        unlink(dir, recursive = TRUE)
-        dir.create(dir)
-        probs_a <- classify_with(path, cube, models[["a"]], dir, "a")
-        probs_b <- classify_with(path, cube, models[["b"]], dir, "b")
-        probs_s <- classify_with(path, cube, stack, dir, "ab")
-        expect_equal(unname(.cube_labels(probs_s)), .ml_labels(stack))
-        s <- probs_values(probs_s)
+        root <- file.path(tempdir(), paste0("stack_", path))
+        unlink(root, recursive = TRUE)
+        dirs <- c(a = file.path(root, "a"), b = file.path(root, "b"),
+                  ref = file.path(root, "ref"))
+        for (d in c(root, dirs)) dir.create(d)
+        probs_a <- classify_with(path, cube, models[["a"]], dirs[["ref"]], "a")
+        probs_b <- classify_with(path, cube, models[["b"]], dirs[["ref"]], "b")
+        probs <- classify_with(path, cube, stack, dirs[c("a", "b")], "ignored")
+        expect_named(probs, c("a", "b"))
+        expect_s3_class(probs[["a"]], "probs_cube")
+        expect_equal(.cube_labels(probs[["a"]]), .cube_labels(probs_a))
+        expect_equal(.cube_labels(probs[["b"]]), .cube_labels(probs_b))
+        # one file per model in its own dir, with the model's labels only
+        expect_equal(unname(tifs_in(dirs[["a"]])), length(.ml_labels(models[["a"]])))
+        expect_equal(unname(tifs_in(dirs[["b"]])), length(.ml_labels(models[["b"]])))
+        expect_equal(dirname(.fi(probs[["a"]])[["path"]]), unname(dirs[["a"]]))
+        expect_match(.fi(probs[["b"]])[["path"]], "_probs_b\\.tif$")
+        # no block file is left
+        expect_length(list.files(file.path(dirs[c("a", "b")], ".sits"),
+                                 pattern = "block"), 0L)
         # within one unit of the INT2U scale, as the CPU/GPU test
-        expect_lte(max(abs(s[, seq_len(n_a)] - probs_values(probs_a))), 1L)
-        expect_lte(max(abs(s[, -seq_len(n_a)] - probs_values(probs_b))), 1L)
-        unlink(dir, recursive = TRUE)
+        expect_lte(max(abs(probs_values(probs[["a"]]) - probs_values(probs_a))), 1L)
+        expect_lte(max(abs(probs_values(probs[["b"]]) - probs_values(probs_b))), 1L)
+        unlink(root, recursive = TRUE)
     }
 })
 
-test_that("sits_stack_split writes one probs cube per model", {
+test_that("a stack writes to one dir, named by model, and keeps done files", {
     skip_on_cran()
     skip_if_not_installed("torch")
     skip_if_not_installed("luz")
     models <- stack_test_models()
     stack <- sits_stack_model(a = models[["a"]], b = models[["b"]])
     cube <- stack_test_cube()
-    dir <- file.path(tempdir(), "stack_split")
+    dir <- file.path(tempdir(), "stack_one_dir")
     unlink(dir, recursive = TRUE)
     dir.create(dir)
     on.exit(unlink(dir, recursive = TRUE), add = TRUE)
-    probs_a <- classify_with("cpu", cube, models[["a"]], dir, "a")
-    probs_s <- classify_with("cpu", cube, stack, dir, "ab")
-    split <- sits_stack_split(probs_s, output_dir = dir)
-    expect_named(split, c("a", "b"))
-    expect_s3_class(split[["a"]], "probs_cube")
-    expect_equal(.cube_labels(split[["a"]]), .cube_labels(probs_a))
-    expect_equal(.cube_labels(split[["b"]]), .ml_labels_code(models[["b"]]))
-    n_a <- length(.ml_labels(models[["a"]]))
-    s <- probs_values(probs_s)
-    expect_equal(probs_values(split[["a"]]), s[, seq_len(n_a)], ignore_attr = TRUE)
-    expect_equal(probs_values(split[["b"]]), s[, -seq_len(n_a)], ignore_attr = TRUE)
+    probs <- classify_with("cpu", cube, stack, dir, "ignored")
+    expect_setequal(basename(names(tifs_in(dir))),
+                    basename(c(.fi(probs[["a"]])[["path"]], .fi(probs[["b"]])[["path"]])))
+    expect_match(.fi(probs[["a"]])[["path"]], "_probs_a\\.tif$")
     # a second call keeps the files
-    path <- .fi(split[["b"]])[["path"]]
+    path <- .fi(probs[["b"]])[["path"]]
     mtime <- file.mtime(path)
     Sys.sleep(1.1)
-    sits_stack_split(probs_s, output_dir = dir)
+    again <- classify_with("cpu", cube, stack, dir, "ignored")
     expect_equal(file.mtime(path), mtime)
-})
-
-test_that("sits_stack_split writes each model to its own dir", {
-    skip_on_cran()
-    skip_if_not_installed("torch")
-    skip_if_not_installed("luz")
-    models <- stack_test_models()
-    stack <- sits_stack_model(a = models[["a"]], b = models[["b"]])
-    cube <- stack_test_cube()
-    root <- file.path(tempdir(), "stack_dirs")
-    unlink(root, recursive = TRUE)
-    dirs <- c(a = file.path(root, "a"), b = file.path(root, "b"))
-    for (d in c(root, dirs)) dir.create(d)
-    on.exit(unlink(root, recursive = TRUE), add = TRUE)
-    probs_s <- classify_with("cpu", cube, stack, root, "ab")
-    split <- sits_stack_split(probs_s, output_dir = dirs)
-    expect_equal(dirname(.fi(split[["a"]])[["path"]]), unname(dirs[["a"]]))
-    expect_equal(dirname(.fi(split[["b"]])[["path"]]), unname(dirs[["b"]]))
-    expect_length(list.files(dirs[["a"]]), 1L)
-    expect_length(list.files(dirs[["b"]]), 1L)
-    # dirs not named by the models of the cube
-    expect_error(sits_stack_split(probs_s, output_dir = c(a = root, c = root)))
+    expect_equal(.cube_labels(again[["b"]]), .cube_labels(probs[["b"]]))
+    # dirs not named by the models of the stack
+    expect_error(classify_with("cpu", cube, stack, c(a = dir, c = dir), "x"))
 })
