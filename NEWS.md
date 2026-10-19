@@ -45,6 +45,12 @@ remove deprecated functions. The highlights below are grouped by theme.
 * Add `sits_stack_model()` to classify a cube with several torch models that
   read each block once; each model writes its own probability cube to its
   own output directory
+* Run the softmax and the scaling of probabilities on the GPU in
+  `sits_classify()`, write each block while the GPU predicts the next, and
+  release the CUDA cache after each tile
+* Classify all tiles of a raster cube on the GPU with one `torch` dataloader,
+  so its workers start once per `sits_classify()` call and not once per tile;
+  each tile is merged as soon as its last block is written
 
 ### New classification model
 * Add `sits_lstm_fcn()`, a Long Short-Term Memory Fully Convolutional Network
