@@ -286,7 +286,8 @@
             out_band = out_band,
             band_conf = band_conf,
             ml_labels = .ml_labels(ml_model),
-            crs = .tile_crs(tile)
+            crs = .tile_crs(tile),
+            ml_model = ml_model
         )
         # Classify!
         new_files <- unlist(ml_model(

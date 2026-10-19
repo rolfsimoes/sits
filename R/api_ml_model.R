@@ -73,6 +73,10 @@
 #' @param  ml_model  Closure that contains ML model and its environment
 #' @return           Sample labels used to build the model
 .ml_labels <- function(ml_model) {
+    # a stack keeps the labels of its models, as name:label
+    if (inherits(ml_model, "stack_model")) {
+        return(environment(ml_model)[["labels"]])
+    }
     .samples_labels(.ml_samples(ml_model))
 }
 #' @title Return codes of sample labels of used to train ML model
@@ -120,6 +124,20 @@
     column_names <- colnames(values)
     values[is.na(values)] <- 0
     values <- softmax(values)
+    colnames(values) <- column_names
+    values
+}
+#' @export
+#'
+.ml_normalize.stack_model <- function(values, ml_model) {
+    # softmax inside the columns of each model, not across models
+    column_names <- colnames(values)
+    values[is.na(values)] <- 0
+    groups <- sub(":.*$", "", .ml_labels(ml_model))
+    for (group in unique(groups)) {
+        index <- which(groups == group)
+        values[, index] <- softmax(values[, index, drop = FALSE])
+    }
     colnames(values) <- column_names
     values
 }
