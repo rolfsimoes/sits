@@ -5,14 +5,15 @@
 #' @description Takes named torch models trained on the same bands and
 #' timeline and returns one model. \code{\link[sits]{sits_classify}} with
 #' it reads each block of the cube once and runs every model on it, each
-#' with its own normalization statistics and its own softmax. The
-#' probability cube has the labels of all models, as \code{name:label};
-#' \code{\link[sits]{sits_stack_split}} writes one probability cube per
-#' model.
+#' with its own normalization statistics and its own softmax. Each
+#' model writes its own probability file, whose version is the model name,
+#' to its own \code{output_dir}; \code{sits_classify} returns a named list
+#' of probability cubes, one per model.
 #'
 #' @param ...  Two or more named torch models
 #'             (trained by \code{\link[sits]{sits_train}}).
-#' @return A model to be used by \code{\link[sits]{sits_classify}}.
+#' @return A model to be used by \code{\link[sits]{sits_classify}}, whose
+#'   \code{output_dir} is one directory, or one per model, named by model.
 #'
 #' @examples
 #' if (sits_run_examples()) {
@@ -29,7 +30,7 @@
 #'         data_dir = system.file("extdata/raster/mod13q1", package = "sits")
 #'     )
 #'     probs <- sits_classify(cube, ml_model = stack, output_dir = tempdir())
-#'     probs_ab <- sits_stack_split(probs, output_dir = tempdir())
+#'     probs[["a"]]
 #' }
 #' @export
 sits_stack_model <- function(...) {
@@ -97,71 +98,155 @@ sits_stack_model <- function(...) {
                class(predict_fun))
 }
 
-#' @title Write one probability cube per model of a stack
-#' @name sits_stack_split
-#' @author Rolf Simoes, \email{rolfsimoes@@gmail.com}
-#'
-#' @description Takes the probability cube made by
-#' \code{\link[sits]{sits_classify}} with a model of
-#' \code{\link[sits]{sits_stack_model}} and writes, for each model, a
-#' probability cube with its labels, whose version is the model name.
-#' A file that exists is kept.
-#'
-#' @param cube        Probability cube with \code{name:label} labels.
-#' @param output_dir  Directory of the output files, or one directory per
-#'                    model, named by model.
-#' @return A named list of probability cubes, one per model.
-#' @export
-sits_stack_split <- function(cube, output_dir) {
-    .check_is_probs_cube(cube)
-    labels <- .cube_labels(cube)
-    .check_that(
-        all(grepl(":", labels, fixed = TRUE)),
-        msg = "sits_stack_split() needs the labels of a stack (name:label)"
-    )
-    names_of <- sub(":.*$", "", labels)
-    models <- unique(names_of)
+#' @title The models of a stack, named
+#' @keywords internal
+#' @noRd
+.stack_models <- function(ml_model) {
+    environment(ml_model)[["models"]]
+}
+
+#' @title One output dir per model of a stack, named by model
+#' @keywords internal
+#' @noRd
+#' @param output_dir One dir, or one per model, named by model.
+.stack_output_dir <- function(output_dir, ml_model) {
+    models <- names(.stack_models(ml_model))
     if (length(output_dir) == 1L && is.null(names(output_dir))) {
         output_dir <- stats::setNames(rep(output_dir, length(models)), models)
     }
     .check_that(
-        setequal(names(output_dir), models) &&
-            length(output_dir) == length(models),
+        length(output_dir) == length(models) &&
+            setequal(names(output_dir), models),
         msg = "output_dir is one dir, or one per model, named by model"
     )
     for (dir in output_dir) .check_output_dir(dir)
-    cubes <- lapply(models, function(name) {
-        index <- which(names_of == name)
-        .cube_foreach_tile(cube, function(tile) {
-            out_file <- .file_derived_name(
-                tile = tile, band = "probs", version = name,
-                output_dir = output_dir[[name]]
+    output_dir[models]
+}
+
+#' @title Probs file of a tile: one per model of a stack, named by model
+#' @keywords internal
+#' @noRd
+#' @description A stack names each file with its model name as version.
+.classify_out_file <- function(tile, ml_model, version, output_dir) {
+    if (!inherits(ml_model, "stack_model")) {
+        return(.file_derived_name(
+            tile = tile, band = "probs", version = version,
+            output_dir = output_dir
+        ))
+    }
+    models <- names(.stack_models(ml_model))
+    stats::setNames(vapply(models, function(name) {
+        .file_derived_name(
+            tile = tile, band = "probs", version = name,
+            output_dir = output_dir[[name]]
+        )
+    }, character(1L), USE.NAMES = FALSE), models)
+}
+
+#' @title Block files of the probs files of a tile, in their dirs
+#' @keywords internal
+#' @noRd
+.classify_block_files <- function(out_file, block) {
+    stats::setNames(vapply(out_file, function(file) {
+        .file_block_name(
+            pattern = .file_pattern(file), block = block,
+            output_dir = dirname(file)
+        )
+    }, character(1L), USE.NAMES = FALSE), names(out_file))
+}
+
+#' @title Write the probs of a block, each model of a stack to its file
+#' @keywords internal
+#' @noRd
+.classify_block_write <- function(files, values, ml_model, block, bbox,
+                                  band_conf, crop_block) {
+    columns <- list(seq_len(ncol(values)))
+    if (inherits(ml_model, "stack_model")) {
+        model_of <- sub(":.*$", "", .ml_labels(ml_model))
+        columns <- lapply(names(files), function(name) which(model_of == name))
+    }
+    for (i in seq_along(files)) {
+        .raster_write_block(
+            files = files[[i]],
+            block = block,
+            bbox = bbox,
+            values = values[, columns[[i]], drop = FALSE],
+            data_type = .data_type(band_conf),
+            missing_value = .miss_value(band_conf),
+            crop_block = crop_block
+        )
+    }
+    files
+}
+
+#' @title Probs tile from its files: a named list of tiles for a stack
+#' @keywords internal
+#' @noRd
+.classify_tile_from_files <- function(out_file, tile, ml_model) {
+    one <- function(file, model) {
+        .tile_derived_from_file(
+            file = file,
+            band = "probs",
+            base_tile = tile,
+            labels = .ml_labels_code(model),
+            derived_class = "probs_cube",
+            update_bbox = TRUE
+        )
+    }
+    if (!inherits(ml_model, "stack_model")) {
+        return(one(out_file, ml_model))
+    }
+    Map(one, out_file, .stack_models(ml_model)[names(out_file)])
+}
+
+#' @title Merge the blocks of a tile into its probs files
+#' @keywords internal
+#' @noRd
+#' @description One probs tile, or a named list of tiles for a stack. With
+#'   a ROI, the merged file goes to .sits and is cropped into its dir.
+.classify_merge <- function(tile, out_file, block_files, ml_model, out_band,
+                            version, roi, update_bbox, progress) {
+    one <- function(file, blocks, model, file_version) {
+        merge_out_file <- file
+        if (.has(roi)) {
+            merge_out_file <- .file_derived_name(
+                tile = tile,
+                band = out_band,
+                version = file_version,
+                output_dir = file.path(dirname(file), ".sits")
             )
-            if (!file.exists(out_file)) {
-                tmp_file <- paste0(out_file, ".tmp.tif")
-                params <- c(
-                    list("-of" = "GTiff"),
-                    stats::setNames(as.list(as.character(index)),
-                                    rep("-b", length(index))),
-                    stats::setNames(as.list(.conf("gdal_presets", "image", "co")),
-                                    rep("-co", length(.conf("gdal_presets", "image", "co"))))
-                )
-                .gdal_translate(
-                    file = tmp_file, base_file = .tile_path(tile),
-                    params = params, quiet = TRUE
-                )
-                file.rename(tmp_file, out_file)
-            }
-            # codes from 1, as .ml_labels_code() of the model alone
-            model_labels <- sub("^[^:]*:", "", unname(labels[index]))
-            names(model_labels) <- seq_along(model_labels)
-            .tile_derived_from_file(
-                file = out_file, band = "probs", base_tile = tile,
-                derived_class = "probs_cube", labels = model_labels
-            )
-        })
-    })
-    stats::setNames(cubes, models)
+        }
+        probs_tile <- .tile_derived_merge_blocks(
+            file = merge_out_file,
+            band = out_band,
+            labels = .ml_labels_code(model),
+            base_tile = tile,
+            block_files = blocks,
+            derived_class = "probs_cube",
+            multicores = .jobs_multicores(),
+            update_bbox = update_bbox
+        )
+        if (!.has(roi)) {
+            return(probs_tile)
+        }
+        probs_tile_crop <- .crop(
+            cube = probs_tile,
+            roi = roi,
+            output_dir = dirname(file),
+            multicores = 1L,
+            progress = progress
+        )
+        unlink(.fi_paths(.fi(probs_tile)))
+        probs_tile_crop
+    }
+    if (!inherits(ml_model, "stack_model")) {
+        return(one(out_file, unname(block_files), ml_model, version))
+    }
+    models <- .stack_models(ml_model)
+    stats::setNames(lapply(names(out_file), function(name) {
+        one(out_file[[name]], unname(block_files[names(block_files) == name]),
+            models[[name]], name)
+    }), names(out_file))
 }
 
 #' @title A torch module that runs the models of a stack on one block

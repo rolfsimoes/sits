@@ -39,8 +39,8 @@ remove deprecated functions. The highlights below are grouped by theme.
 * Improve parallel error reporting
 * Skip NA pixels during ML inference in `.classify_tile` for better performance
 * Add `sits_stack_model()` to classify a cube with several torch models that
-  read each block once, and `sits_stack_split()` to write one probability
-  cube per model
+  read each block once; each model writes its own probability cube to its
+  own output directory
 
 ### New classification model
 * Add `sits_lstm_fcn()`, a Long Short-Term Memory Fully Convolutional Network
