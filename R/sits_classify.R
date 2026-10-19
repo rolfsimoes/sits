@@ -485,7 +485,7 @@ sits_classify.raster_cube <- function(data,
         # Clean GPU memory allocation on exit
         on.exit(.ml_gpu_clean(ml_model), add = TRUE)
     }
-    # Process each tile sequentially
+    # Process each tile sequentially (CPU)
     classify_tile <- function(tile) {
         # Define the name of the output file (one per model of a stack)
         out_file <- .classify_out_file(
@@ -501,48 +501,58 @@ sits_classify.raster_cube <- function(data,
             .check_recovery()
             return(.classify_tile_from_files(out_file, tile, ml_model))
         }
-        # Classify the tile using the raster workflow (CPU or GPU)
-        if (.torch_gpu_classification() && .ml_is_torch_model(ml_model)) {
-            .classify_tile_gpu(
-                tile = tile,
-                out_band = "probs",
-                out_file = out_file,
-                bands = bands,
-                base_bands = base_bands,
-                ml_model = ml_model,
-                block = block,
-                roi = roi,
-                exclusion_mask = exclusion_mask,
-                impute_fn = impute_fn,
-                output_dir = output_dir[[1L]],
-                version = version,
-                verbose = verbose,
-                progress = progress
-            )
-        } else {
-            .classify_tile_cpu(
-                tile = tile,
-                out_band = "probs",
-                out_file = out_file,
-                bands = bands,
-                base_bands = base_bands,
-                ml_model = ml_model,
-                block = block,
-                roi = roi,
-                exclusion_mask = exclusion_mask,
-                impute_fn = impute_fn,
-                output_dir = output_dir[[1L]],
-                version = version,
-                verbose = verbose,
-                progress = progress
-            )
-        }
+        # Classify the tile using the raster workflow
+        .classify_tile_cpu(
+            tile = tile,
+            out_band = "probs",
+            out_file = out_file,
+            bands = bands,
+            base_bands = base_bands,
+            ml_model = ml_model,
+            block = block,
+            roi = roi,
+            exclusion_mask = exclusion_mask,
+            impute_fn = impute_fn,
+            output_dir = output_dir[[1L]],
+            version = version,
+            verbose = verbose,
+            progress = progress
+        )
+    }
+    if (.torch_gpu_classification() && .ml_is_torch_model(ml_model)) {
+        # one dataloader for all tiles, so its workers start once per call
+        tiles <- .classify_tiles_gpu(
+            tiles = data,
+            out_files = slider::slide(data, function(tile) {
+                .classify_out_file(
+                    tile = tile,
+                    ml_model = ml_model,
+                    version = version,
+                    output_dir = output_dir
+                )
+            }),
+            out_band = "probs",
+            bands = bands,
+            base_bands = base_bands,
+            ml_model = ml_model,
+            block = block,
+            roi = roi,
+            exclusion_mask = exclusion_mask,
+            impute_fn = impute_fn,
+            output_dir = output_dir[[1L]],
+            version = version,
+            verbose = verbose,
+            progress = progress
+        )
+    } else if (!inherits(ml_model, "stack_model")) {
+        return(.cube_foreach_tile(data, classify_tile))
+    } else {
+        tiles <- slider::slide(data, classify_tile)
     }
     if (!inherits(ml_model, "stack_model")) {
-        return(.cube_foreach_tile(data, classify_tile))
+        return(.map_dfr(tiles, identity))
     }
     # a stack gives one probs cube per model
-    tiles <- slider::slide(data, classify_tile)
     lapply(stats::setNames(nm = names(output_dir)), function(name) {
         .map_dfr(tiles, function(tile) tile[[name]])
     })
