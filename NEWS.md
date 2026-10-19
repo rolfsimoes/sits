@@ -42,6 +42,9 @@ remove deprecated functions. The highlights below are grouped by theme.
   (cgroup), or to its new `threads` argument, and restores them after; in a
   container, `torch` started one thread per visible core and kept the GPU
   waiting
+* Add `sits_stack_model()` to classify a cube with several torch models that
+  read each block once, and `sits_stack_split()` to write one probability
+  cube per model
 
 ### New classification model
 * Add `sits_lstm_fcn()`, a Long Short-Term Memory Fully Convolutional Network

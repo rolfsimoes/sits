@@ -456,12 +456,14 @@
                                     out_band,
                                     band_conf,
                                     ml_labels,
-                                    crs) {
+                                    crs,
+                                    ml_model = NULL) {
     callback <- luz::luz_callback(
         name = ".callback_post_classify",
         initialize = function(output_dir, out_file, out_band, band_conf,
-                              ml_labels, crs) {
+                              ml_labels, crs, ml_model) {
             self$output_dir <- output_dir
+            self$ml_model <- ml_model
             self$out_file <- out_file
             self$out_band <- out_band
             self$band_conf <- band_conf
@@ -518,7 +520,12 @@
             )
             if (input_pixels > 0L) {
                 # Normalize values
-                values <- .ml_normalize.torch_model(values, NULL)
+                # a stack normalizes inside each model's columns
+                if (inherits(self$ml_model, "stack_model")) {
+                    values <- .ml_normalize(values, self$ml_model)
+                } else {
+                    values <- .ml_normalize.torch_model(values, NULL)
+                }
                 # Check processed values
                 .check_processed_values(
                     values = values,
@@ -553,7 +560,8 @@
         out_band = out_band,
         band_conf = band_conf,
         ml_labels = ml_labels,
-        crs = crs
+        crs = crs,
+        ml_model = ml_model
     )
 }
 #' @title Decide if a value must be processed as a dataloader

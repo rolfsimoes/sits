@@ -569,6 +569,10 @@
     if (!.ml_is_torch_model(ml_model)) {
         return(invisible(NULL))
     }
+    if (inherits(ml_model, "stack_model")) {
+        lapply(environment(ml_model)[["models"]], .torch_model_to_device)
+        return(invisible(NULL))
+    }
     torch_model <- .ml_model(ml_model)
     if (torch::cuda_is_available()) {
         torch_model$model <- torch_model$model$to(device = "cuda")

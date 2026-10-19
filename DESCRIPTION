@@ -300,6 +300,7 @@ Collate:
     'sits_ssl_vicreg.R'
     'sits_smooth.R'
     'sits_som.R'
+    'sits_stack_model.R'
     'sits_stars.R'
     'sits_summary.R'
     'sits_tae.R'
