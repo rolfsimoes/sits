@@ -15,6 +15,10 @@ test_that("AlphaEarth grid system", {
 })
 
 test_that("Creating an AlphaEarth cube", {
+    # the cube must set the variable even if the session did not
+    readdir_old <- Sys.getenv("GDAL_DISABLE_READDIR_ON_OPEN", unset = NA)
+    Sys.unsetenv("GDAL_DISABLE_READDIR_ON_OPEN")
+
     # define cube
     cube <- .try(
         {
@@ -33,11 +37,18 @@ test_that("Creating an AlphaEarth cube", {
         },
         .default = NULL
     )
+    readdir_new <- Sys.getenv("GDAL_DISABLE_READDIR_ON_OPEN")
+    if (!is.na(readdir_old)) {
+        Sys.setenv(GDAL_DISABLE_READDIR_ON_OPEN = readdir_old)
+    }
 
     # skip if cube is null
     testthat::skip_if(purrr::is_null(cube),
         message = "AlphaEarth is not accessible"
     )
+
+    # each sidecar file search is one HTTP request per image
+    expect_equal(readdir_new, "EMPTY_DIR")
 
     # check cube
     expect_s3_class(cube, "alphaearth_cube")

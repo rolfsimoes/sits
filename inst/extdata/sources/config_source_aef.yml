@@ -600,5 +600,9 @@ sources:
                 grid_system    : "ALPHAEARTH"
                 open_data      : true
                 open_data_token: false
+                # GDAL lists the remote folder and probes about 40 sidecar
+                # files per image unless the folder is taken as empty
+                access_vars    :
+                    GDAL_DISABLE_READDIR_ON_OPEN: "EMPTY_DIR"
                 metadata_search: "tile"
                 dates          : "2017 to 2025"
