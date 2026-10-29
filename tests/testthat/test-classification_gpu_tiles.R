@@ -182,3 +182,48 @@ test_that("the dataloader path skips done tiles and recovered blocks", {
     expect_lte(max(abs(tile_values(last[["probs"]], "B") - values_b),
                    na.rm = TRUE), 1L)
 })
+
+test_that("a tile is merged after its last deferred block is written", {
+    skip_on_cran()
+    skip_if_not_installed("torch")
+    skip_if_not_installed("luz")
+    root <- file.path(tempdir(), "gpu_tiles_order")
+    unlink(root, recursive = TRUE)
+    on.exit(unlink(root, recursive = TRUE), add = TRUE)
+    cube <- gpu_tiles_cube(root)
+    model <- gpu_tiles_model(2971L)
+    dir <- file.path(root, "gpu")
+    dir.create(dir)
+    probs_file <- vapply(c("A", "B"), function(name) {
+        .file_derived_name(
+            tile = cube[cube[["tile"]] == name, ], band = "probs",
+            version = "v1", output_dir = dir
+        )
+    }, character(1L))
+    events <- character(0L)
+    missing <- 0L
+    write <- .classify_write_block
+    merge <- .classify_merge
+    gpu <- try(testthat::with_mocked_bindings(
+        classify_gpu_tiles(TRUE, cube, model, dir),
+        .classify_write_block = function(..., out_file) {
+            name <- names(probs_file)[probs_file == out_file]
+            events <<- c(events, paste("write", name))
+            write(..., out_file = out_file)
+        },
+        .classify_merge = function(tile, block_files, ...) {
+            events <<- c(events, paste("merge", tile[["tile"]]))
+            missing <<- missing + sum(!file.exists(block_files))
+            merge(tile, block_files = block_files, ...)
+        }
+    ), silent = TRUE)
+    # 127 x 147 pixels in blocks of 64 x 64: 2 x 3 blocks per tile
+    n_blocks <- 6L
+    # tile A merges while the dataloader reads tile B
+    expect_equal(events, c(
+        rep("write A", n_blocks), "merge A",
+        rep("write B", n_blocks), "merge B"
+    ))
+    expect_equal(missing, 0L)
+    expect_false(inherits(gpu, "try-error"))
+})

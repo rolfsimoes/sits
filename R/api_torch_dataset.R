@@ -7,13 +7,16 @@
 #'
 #' @param model      Trained torch module.
 #' @param batch_size Maximum number of rows per forward pass.
+#' @param post       Function applied on the device to the output of a
+#'                   block, or NULL.
 #'
 #' @return A torch module.
 .torch_model_wrap <- torch::nn_module(
     ".torch_model_wrap",
-    initialize = function(model, batch_size) {
+    initialize = function(model, batch_size, post = NULL) {
         self$model <- model
         self$batch_size <- batch_size
+        self$post <- post
     },
     # luz calls the `predict` method of a module when it defines one, and
     # its `forward` method otherwise (see luz:::predict.luz_module_fitted).
@@ -97,9 +100,41 @@
         output
     },
     predict = function(values) {
-        self$forward_wrapped(self$model_fn(), values)
+        output <- self$forward_wrapped(self$model_fn(), values)
+        # a block with no valid pixels returns NA, not a tensor
+        if (is.null(self$post) || !inherits(output, "torch_tensor")) {
+            return(output)
+        }
+        self$post(output)
     }
 )
+
+#' @title Softmax and scale class probabilities on the device
+#' @name .torch_probs_on_device
+#' @keywords internal
+#' @noRd
+#' @description Does on the device what .ml_normalize does for a torch
+#' model (the softmax), then applies the offset and scale of the probs
+#' band, so the host receives integers.
+#'
+#' @param band_conf Band configuration of the probs cube.
+#'
+#' @return A function of the output tensor that returns an integer tensor.
+.torch_probs_on_device <- function(band_conf) {
+    offset <- .default(.offset(band_conf), 0.0)
+    scale <- .default(.scale(band_conf), 1.0)
+    # 16-bit integers halve the bytes copied to the host
+    dtype <- torch::torch_int32()
+    if (.max_value(band_conf) <= 32767L) {
+        dtype <- torch::torch_int16()
+    }
+    function(values) {
+        # .ml_normalize turns NA into 0 before the softmax
+        values <- values$masked_fill(torch::torch_isnan(values), 0.0)
+        probs <- torch::nnf_softmax(values, dim = 2L)
+        torch::torch_round((probs - offset) / scale)$to(dtype = dtype)
+    }
+}
 
 #' @title Verify if the error was caused by GPU memory overflow
 #' @name .torch_error_is_oom
@@ -121,7 +156,8 @@
 #'
 #' @param torch_model Torch model.
 #' @param dataset     Torch dataset.
-#' @param callback    Post-processing callback.
+#' @param callback    Post-processing callback; its field \code{device_post},
+#'                    when set, runs on the device on each block output.
 #'
 #' @return A character vector with files.
 .torch_predict_chunks <- function(torch_model, dataset, callback) {
@@ -135,7 +171,8 @@
     # Wrap model with custom torch module which enhances GPU handling
     torch_model[["model"]] <- .torch_model_wrap(
         model = torch_model[["model"]],
-        batch_size = sits_env[["batch_size"]]
+        batch_size = sits_env[["batch_size"]],
+        post = callback[["device_post"]]
     )
     # Define dataloader
     dataloader <- torch::dataloader(
@@ -452,6 +489,11 @@
 #' @keywords internal
 #' @noRd
 #'
+#' @description The model output arrives already as integer probabilities
+#' (see .torch_probs_on_device). The callback of block i writes block i-1
+#' before it copies block i to the host, so the write runs while the
+#' device computes block i; the last block is written at the end.
+#'
 #' @param output_dir A character with output directory.
 #' @param out_file   A list with the output file of each tile.
 #' @param out_band   A character vector with output band.
@@ -480,19 +522,33 @@
             self$band_conf <- band_conf
             self$ml_labels <- ml_labels
             self$crs <- crs
+            # read by .torch_predict_chunks
+            self$device_post <- .torch_probs_on_device(
+                band_conf = band_conf
+            )
+            self$pending <- NULL
+        },
+        on_predict_begin = function() {
+            self$pending <- NULL
         },
         on_predict_batch_end = function() {
+            index <- length(ctx$pred)
+            # device kernels of this block may still be running
+            values <- ctx$pred[[index]]
+            # write the previous block meanwhile
+            self$write_pending()
             # Starts with zero and then updates when there are valid values
             input_pixels <- 0
-            # Get prediction as a matrix with labels
             # When a chunk has no valid pixels, the wrapped model returns a
             # scalar NA instead of a tensor; only process actual tensors
-            values <- ctx$pred[[length(ctx$pred)]]
             if (inherits(values, "torch_tensor")) {
-                # Get predicted values
-                values <- torch::as_array(values)
-                colnames(values) <- self$ml_labels
-                # Get number of valid pixels
+                # floats here mean the output skipped .torch_probs_on_device
+                .check_that(!values$is_floating_point())
+                # waits for the device; as_array() takes no 16-bit
+                # integers, so they are widened on the host
+                values <- torch::as_array(
+                    values$cpu()$to(dtype = torch::torch_int32())
+                )
                 input_pixels <- dim(values)[[1L]]
             }
             # Get auxiliary values for the callback
@@ -515,54 +571,50 @@
                 # crs
                 crs = self$crs[[tile_index]]
             )
-            # Apply scaling to classified values
-            band_scale <- .scale(self$band_conf)
             # Reconstruct full output matrix with NA for masked pixels
-            n_labels <- length(self$ml_labels)
             full_values <- matrix(
                 NA_real_,
                 nrow = length(na_mask),
-                ncol = n_labels,
+                ncol = length(self$ml_labels),
                 dimnames = list(NULL, self$ml_labels)
             )
-            # Log start of block
-            .debug_log(
-                event = "start_block_data_normalization",
-                key = "model",
-                value = "torch_model"
-            )
             if (input_pixels > 0L) {
-                # Normalize values
-                values <- .ml_normalize.torch_model(values, NULL)
-                # Check processed values
                 .check_processed_values(
                     values = values,
                     input_pixels = input_pixels
                 )
-                # Scale values
-                full_values[!na_mask, ] <- values / band_scale
+                full_values[!na_mask, ] <- values
             }
-            # Log end of block
-            .debug_log(
-                event = "end_block_data_normalization",
-                key = "model",
-                value = "torch_model"
+            # free the device tensor; the block file replaces it on write
+            ctx$pred[index] <- list(NULL)
+            self$pending <- list(
+                index = index, values = full_values, block = block,
+                tile_index = tile_index
             )
-            # Write block
+            invisible(NULL)
+        },
+        on_predict_end = function() {
+            self$write_pending()
+        },
+        write_pending = function() {
+            pending <- self$pending
+            if (is.null(pending)) {
+                return(invisible(NULL))
+            }
+            self$pending <- NULL
             block_file <- .classify_write_block(
-                values = full_values,
-                block = block,
+                values = pending[["values"]],
+                block = pending[["block"]],
                 output_dir = self$output_dir,
-                out_file = self$out_file[[tile_index]],
+                out_file = self$out_file[[pending[["tile_index"]]]],
                 out_band = self$out_band
             )
-            # Let the caller merge the tile once its last block is written
+            ctx$pred[[pending[["index"]]]] <- block_file
+            # the caller merges the tile once its last block is written
             if (!is.null(self$on_block)) {
-                self$on_block(tile_index, block_file)
+                self$on_block(pending[["tile_index"]], block_file)
             }
-            # Replace accumulated tensor with the block file path
-            ctx$pred[[length(ctx$pred)]] <- block_file
-            ctx$pred
+            invisible(NULL)
         }
     )
     # Build and return!

@@ -299,6 +299,9 @@
                 update_bbox = plans[[i]][["update_bbox"]],
                 progress = progress
             )
+            # the CUDA cache keeps the peak of this tile reserved for the
+            # next one
+            .ml_gpu_clean(ml_model)
             # The post loop of the caller starts on this line
             .tile_classif_end(
                 tile = tile,

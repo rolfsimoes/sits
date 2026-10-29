@@ -35,6 +35,9 @@ remove deprecated functions. The highlights below are grouped by theme.
 * Classify all tiles of a raster cube on the GPU with one `torch` dataloader,
   so its workers start once per `sits_classify()` call and not once per tile;
   each tile is merged as soon as its last block is written
+* Run the softmax and the scaling of probabilities on the GPU in
+  `sits_classify()`, write each block while the GPU predicts the next, and
+  release the CUDA cache after each tile
 * Use `torch` by default in `sits_smooth()`, with automatic C++ fallback
 * Add `SITS_FORCE_CPU` environment flag to force CPU or GPU pipelines
 * Add `sits_parallel()` to start, restart, stop, or query a persistent parallel
