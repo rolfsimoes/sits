@@ -105,6 +105,11 @@ sits_classify <- function(data, ml_model, ...) {
 #' @param  impute_fn         Imputation function to remove NA.
 #' @param  multicores        Number of cores to be used for classification
 #'                           (integer, min = 1, max = 2048).
+#' @param  threads           CPU threads of torch in this process
+#'                           (integer, or NULL). NULL uses the CPU quota of
+#'                           the process (its cgroup), or all cores when there
+#'                           is no quota. Workers started by \code{multicores}
+#'                           use one thread each. Used only by torch models.
 #' @param  gpu_memory        Memory available in GPU in GB (default = 4)
 #' @param  batch_size        Batch size for GPU classification.
 #' @param  progress          Logical: Show progress bar?
@@ -161,6 +166,7 @@ sits_classify.sits <- function(data,
                                ...,
                                impute_fn = impute_linear(),
                                multicores = 2L,
+                               threads = NULL,
                                gpu_memory = 4L,
                                batch_size = 2L^gpu_memory,
                                progress = TRUE) {
@@ -171,6 +177,7 @@ sits_classify.sits <- function(data,
     .check_is_sits_model(ml_model)
     .check_model_has_stats(ml_model)
     .check_int_parameter(multicores, min = 1L, max = 2048L)
+    .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     progress <- .message_progress(progress)
     .check_function(impute_fn)
         # Check torch version model compatibility
@@ -185,6 +192,12 @@ sits_classify.sits <- function(data,
     if (multicores != multicores2) {
         .parallel_force_multicores(multicores)
         on.exit(.parallel_force_multicores()) # restore to default
+    }
+    # torch starts one thread per visible core; set after the on.exit()
+    # above, which has no add = TRUE and would drop this one
+    if (.ml_is_torch_model(ml_model)) {
+        restore_threads <- .torch_set_threads(threads)
+        on.exit(restore_threads(), add = TRUE)
     }
     # Do classification
     .classify_ts(
@@ -226,6 +239,11 @@ sits_classify.sits <- function(data,
 #'                           (integer, min = 1, max = 16384).
 #' @param  multicores        Number of cores to be used for classification
 #'                           (integer, min = 1, max = 2048).
+#' @param  threads           CPU threads of torch in this process
+#'                           (integer, or NULL). NULL uses the CPU quota of
+#'                           the process (its cgroup), or all cores when there
+#'                           is no quota. Workers started by \code{multicores}
+#'                           use one thread each. Used only by torch models.
 #' @param  gpu_memory        Memory available in GPU in GB (default = 4)
 #' @param  batch_size        Batch size for GPU classification.
 #' @param  block_size        Size of the block read and written by each worker.
@@ -340,6 +358,7 @@ sits_classify.raster_cube <- function(data,
                                       end_date = NULL,
                                       memsize = 8L,
                                       multicores = 2L,
+                                      threads = NULL,
                                       gpu_memory = 4L,
                                       batch_size = 1000*gpu_memory,
                                       block_size = NULL,
@@ -356,6 +375,7 @@ sits_classify.raster_cube <- function(data,
     .check_model_has_stats(ml_model)
     .check_num_parameter(memsize, exclusive_min = 0)
     .check_int_parameter(multicores, min = 1L)
+    .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     .check_int_parameter(gpu_memory, min = 1L)
     .check_batch_size(batch_size)
     .check_block_size(block_size, data)
@@ -376,6 +396,9 @@ sits_classify.raster_cube <- function(data,
     # Check torch version model compatibility
     if (.ml_is_torch_model(ml_model)) {
         .check_torch_model_version(ml_model)
+        # torch starts one thread per visible core, many more than the quota
+        restore_threads <- .torch_set_threads(threads)
+        on.exit(restore_threads(), add = TRUE)
     }
     # Spatial filter
     if (.has(roi)) {
@@ -594,6 +617,11 @@ sits_classify.raster_cube <- function(data,
 #'                           (integer, min = 1, max = 16384).
 #' @param  multicores        Number of cores to be used for classification
 #'                           (integer, min = 1, max = 2048).
+#' @param  threads           CPU threads of torch in this process
+#'                           (integer, or NULL). NULL uses the CPU quota of
+#'                           the process (its cgroup), or all cores when there
+#'                           is no quota. Workers started by \code{multicores}
+#'                           use one thread each. Used only by torch models.
 #' @param  gpu_memory        Memory available in GPU in GB (default = 4)
 #' @param  batch_size        Batch size for GPU classification.
 #' @param  block_size        Size of the block read and written by each worker.
@@ -720,6 +748,7 @@ sits_classify.vector_cube <- function(data,
                                       end_date = NULL,
                                       memsize = 8L,
                                       multicores = 2L,
+                                      threads = NULL,
                                       gpu_memory = 4L,
                                       batch_size = 1000*gpu_memory,
                                       block_size = NULL,
@@ -743,6 +772,7 @@ sits_classify.vector_cube <- function(data,
     .check_model_has_stats(ml_model)
     .check_int_parameter(memsize, min = 1L, max = 16384L)
     .check_int_parameter(multicores, min = 1L, max = 2048L)
+    .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     .check_int_parameter(gpu_memory, min = 1L)
     .check_batch_size(batch_size)
     .check_block_size(block_size, data)
@@ -758,6 +788,9 @@ sits_classify.vector_cube <- function(data,
     # Check torch version model compatibility
     if (.ml_is_torch_model(ml_model)) {
         .check_torch_model_version(ml_model)
+        # torch starts one thread per visible core, many more than the quota
+        restore_threads <- .torch_set_threads(threads)
+        on.exit(restore_threads(), add = TRUE)
     }
     # Spatial filter
     if (.has(roi)) {

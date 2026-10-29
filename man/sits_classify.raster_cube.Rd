@@ -15,6 +15,7 @@
   end_date = NULL,
   memsize = 8L,
   multicores = 2L,
+  threads = NULL,
   gpu_memory = 4L,
   batch_size = 1000 * gpu_memory,
   block_size = NULL,
@@ -54,6 +55,12 @@ shapefile.}
 
 \item{multicores}{Number of cores to be used for classification
 (integer, min = 1, max = 2048).}
+
+\item{threads}{CPU threads of torch in this process
+(integer, or NULL). NULL uses the CPU quota of
+the process (its cgroup), or all cores when there
+is no quota. Workers started by \code{multicores}
+use one thread each. Used only by torch models.}
 
 \item{gpu_memory}{Memory available in GPU in GB (default = 4)}
 

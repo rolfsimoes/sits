@@ -530,6 +530,26 @@
     !(torch::cuda_is_available()) &&
         !(torch::backends_mps_is_available())
 }
+#' @title Set the CPU threads of torch in this process
+#' @name .torch_set_threads
+#' @keywords internal
+#' @noRd
+#' @description Sets the torch threads to \code{threads}, or to the CPU
+#'   quota of the process (\code{.torch_threads()}) when \code{threads} is
+#'   NULL. Does nothing when torch is not installed.
+#' @param threads Number of threads (integer, or NULL).
+#' @return A function that restores the previous threads, for
+#'   \code{on.exit()}.
+.torch_set_threads <- function(threads = NULL) {
+    if (!torch::torch_is_installed()) {
+        return(invisible(function() NULL))
+    }
+    old_threads <- torch::torch_get_num_threads()
+    torch::torch_set_num_threads(
+        if (is.null(threads)) .torch_threads() else as.integer(threads)
+    )
+    invisible(function() torch::torch_set_num_threads(old_threads))
+}
 
 #' @title Restore torch model from closure
 #' @name .torch_model_restore
