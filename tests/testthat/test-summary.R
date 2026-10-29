@@ -121,3 +121,43 @@ test_that("summary BDC cube", {
     expect_true(grepl("007004", sum2[4]))
     expect_true(grepl("007004", sum2[48]))
 })
+test_that("summary of a variance cube does not depend on multicores", {
+    # three labels of random variance, 4096 x 4096 pixels in blocks of 256
+    data_dir <- file.path(tempdir(), "variance_random")
+    dir.create(data_dir, showWarnings = FALSE)
+    set.seed(21L)
+    r <- terra::rast(
+        nrows = 4096L, ncols = 4096L, nlyrs = 3L, xmin = 0, xmax = 122880,
+        ymin = 0, ymax = 122880, crs = "EPSG:32723"
+    )
+    terra::values(r) <- sample.int(10000L, terra::ncell(r) * 3L, TRUE)
+    terra::writeRaster(
+        r,
+        file.path(
+            data_dir,
+            "LANDSAT_OLI_000000_2020-01-01_2020-12-31_variance_v1.tif"
+        ),
+        datatype = "INT2U", overwrite = TRUE,
+        gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256")
+    )
+    cube <- sits_cube(
+        source = "BDC", collection = "LANDSAT-OLI-16D", data_dir = data_dir,
+        bands = "variance", version = "v1",
+        labels = c("1" = "A", "2" = "B", "3" = "C"),
+        parse_info = c("X1", "X2", "tile", "start_date", "end_date",
+                       "band", "version"),
+        progress = FALSE
+    )
+    run <- function(multicores, memsize) {
+        set.seed(5L)
+        suppressMessages(summary(
+            cube, sample_size = 10000L, multicores = multicores,
+            memsize = memsize
+        ))
+    }
+    a <- run(multicores = 2L, memsize = 1L)
+    expect_identical(run(multicores = 2L, memsize = 1L), a)
+    expect_identical(run(multicores = 1L, memsize = 1L), a)
+    expect_identical(run(multicores = 1L, memsize = 4L), a)
+    unlink(data_dir, recursive = TRUE)
+})

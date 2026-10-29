@@ -272,11 +272,10 @@ test_that("stratified sampling does not repeat the draw of each chunk", {
                        "band", "version"),
         progress = FALSE
     )
-    draw <- function(multicores, memsize, seed) {
-        set.seed(seed)
+    draw <- function(multicores, memsize, seed = NULL) {
         p <- sits_stratified_sampling(
             cube, samples_per_class = 1000L, multicores = multicores,
-            memsize = memsize, progress = FALSE
+            memsize = memsize, seed = seed, progress = FALSE
         )
         xy <- sf::st_coordinates(sf::st_transform(p, 32723))
         rc <- terra::rowColFromCell(r, terra::cellFromXY(r, xy)) - 1L
@@ -299,5 +298,31 @@ test_that("stratified sampling does not repeat the draw of each chunk", {
     expect_identical(draw(multicores = 1L, memsize = 1L, seed = 1L), a)
     expect_identical(draw(multicores = 1L, memsize = 2L, seed = 1L), a)
     expect_false(identical(draw(multicores = 2L, memsize = 1L, seed = 2L), a))
+    # with seed, the global state is the state received
+    set.seed(3L)
+    before <- get(".Random.seed", envir = globalenv())
+    invisible(draw(multicores = 1L, memsize = 1L, seed = 1L))
+    expect_identical(get(".Random.seed", envir = globalenv()), before)
+    # without seed, set.seed() repeats the draw
+    set.seed(3L)
+    b <- draw(multicores = 2L, memsize = 1L)
+    set.seed(3L)
+    expect_identical(draw(multicores = 1L, memsize = 2L), b)
     unlink(data_dir, recursive = TRUE)
+})
+test_that("oversampling does not depend on multicores", {
+    # n_samples_under above every class count: SMOTE only. The SOM of the
+    # undersampling runs in "pbatch" mode, whose OpenMP sums change the
+    # result from run to run whatever the seed
+    run <- function(multicores) {
+        set.seed(8L)
+        sits_reduce_imbalance(
+            samples_modis_ndvi,
+            n_samples_over = 200L, n_samples_under = 2000L,
+            multicores = multicores
+        )
+    }
+    a <- run(multicores = 1L)
+    expect_identical(run(multicores = 2L), a)
+    expect_identical(run(multicores = 1L), a)
 })

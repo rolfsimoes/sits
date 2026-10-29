@@ -358,3 +358,29 @@ test_that("normalization new version", {
 test_that("ML errors", {
     expect_error(.ml_model("a"))
 })
+test_that("the seed of a torch method fixes every draw of the training", {
+    train <- function(seed) {
+        sits_train(samples_modis_ndvi, sits_mlp(epochs = 3L, seed = seed))
+    }
+    predict <- function(model) {
+        p <- sits_classify(
+            samples_modis_ndvi[1L:30L, ], model, progress = FALSE
+        )
+        p[["predicted"]]
+    }
+    # the same seed under two global states
+    set.seed(1L)
+    a <- predict(train(7L))
+    set.seed(2L)
+    expect_identical(predict(train(7L)), a)
+    # with seed, the R generator is left as received
+    set.seed(3L)
+    before <- get(".Random.seed", envir = globalenv())
+    invisible(train(7L))
+    expect_identical(get(".Random.seed", envir = globalenv()), before)
+    # without seed, set.seed() repeats the training
+    set.seed(4L)
+    b <- predict(train(NULL))
+    set.seed(4L)
+    expect_identical(predict(train(NULL)), b)
+})
