@@ -4,12 +4,18 @@
 \alias{sits_train}
 \title{Train classification models}
 \usage{
-sits_train(samples, ml_method = sits_rfor())
+sits_train(samples, ml_method = sits_rfor(), threads = NULL)
 }
 \arguments{
 \item{samples}{Time series with the training samples.}
 
 \item{ml_method}{Machine learning method.}
+
+\item{threads}{CPU threads of torch during the training
+(integer, or NULL). NULL uses the CPU quota of
+the process (its cgroup), or all cores when there
+is no quota. Give a share of the quota to each of
+several trainings that run at the same time.}
 }
 \value{
 Model fitted to input data
