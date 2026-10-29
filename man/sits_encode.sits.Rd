@@ -10,6 +10,7 @@
   ...,
   impute_fn = impute_linear(),
   multicores = 2L,
+  threads = NULL,
   gpu_memory = 4L,
   batch_size = 2L^gpu_memory,
   progress = TRUE
@@ -30,6 +31,11 @@ values in each time series (default:
 
 \item{multicores}{Integer. Number of CPU cores used for processing
 (minimum 1, maximum 2048).}
+
+\item{threads}{Integer, or NULL. CPU threads of torch in this process.
+NULL uses the CPU quota of the process (its cgroup), or all cores when
+there is no quota. Workers started by \code{multicores} use one
+thread each.}
 
 \item{gpu_memory}{Numeric. GPU memory available for encoding (in GB).}
 

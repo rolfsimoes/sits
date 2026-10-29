@@ -95,13 +95,8 @@ sits_train <- function(samples, ml_method = sits_rfor(), threads = NULL) {
     .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     # torch starts one thread per visible core, which in a container can
     # be many more than the CPU quota; the GPU then waits for the CPU
-    if (torch::torch_is_installed()) {
-        old_threads <- torch::torch_get_num_threads()
-        on.exit(torch::torch_set_num_threads(old_threads), add = TRUE)
-        torch::torch_set_num_threads(
-            if (is.null(threads)) .torch_threads() else as.integer(threads)
-        )
-    }
+    restore_threads <- .torch_set_threads(threads)
+    on.exit(restore_threads(), add = TRUE)
     # compute the training method by the given data
     result <- ml_method(samples)
     # return a valid machine learning method

@@ -102,6 +102,10 @@ sits_encode <- function(data, encoder, ...) {
 #'   \code{\link[sits]{impute_linear}}).
 #' @param multicores Integer. Number of CPU cores used for processing
 #'   (minimum 1, maximum 2048).
+#' @param threads Integer, or NULL. CPU threads of torch in this process.
+#'   NULL uses the CPU quota of the process (its cgroup), or all cores when
+#'   there is no quota. Workers started by \code{multicores} use one
+#'   thread each.
 #' @param gpu_memory Numeric. GPU memory available for encoding (in GB).
 #' @param batch_size Integer. Batch size used when encoding on GPU.
 #' @param progress Logical. If \code{TRUE}, show a progress bar.
@@ -148,6 +152,7 @@ sits_encode.sits <- function(data,
                              ...,
                              impute_fn = impute_linear(),
                              multicores = 2L,
+                             threads = NULL,
                              gpu_memory = 4L,
                              batch_size = 2L^gpu_memory,
                              progress = TRUE) {
@@ -159,6 +164,7 @@ sits_encode.sits <- function(data,
     .check_model_has_stats(encoder)
     .check_model_has_bands(encoder, .samples_bands(data))
     .check_int_parameter(multicores, min = 1L, max = 2048L)
+    .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     progress <- .message_progress(progress)
     .check_function(impute_fn)
     # Check torch version model compatibility
@@ -173,6 +179,12 @@ sits_encode.sits <- function(data,
     if (multicores != multicores2) {
         .parallel_force_multicores(multicores)
         on.exit(.parallel_force_multicores()) # restore to default
+    }
+    # torch starts one thread per visible core; set after the on.exit()
+    # above, which has no add = TRUE and would drop this one
+    if (.ml_is_torch_model(encoder)) {
+        restore_threads <- .torch_set_threads(threads)
+        on.exit(restore_threads(), add = TRUE)
     }
     # Do classification
     .encode_ts(
@@ -219,6 +231,10 @@ sits_encode.sits <- function(data,
 #'   (minimum 1).
 #' @param multicores Integer. Number of CPU cores used for processing
 #'   (minimum 1).
+#' @param threads Integer, or NULL. CPU threads of torch in this process.
+#'   NULL uses the CPU quota of the process (its cgroup), or all cores when
+#'   there is no quota. Workers started by \code{multicores} use one
+#'   thread each.
 #' @param gpu_memory Integer. GPU memory available for encoding in GB
 #'   (minimum 1).
 #' @param batch_size Integer. Batch size used when encoding on GPU.
@@ -309,6 +325,7 @@ sits_encode.raster_cube <- function(data,
                                     end_date = NULL,
                                     memsize = 8L,
                                     multicores = 2L,
+                                    threads = NULL,
                                     gpu_memory = 4L,
                                     batch_size = 1000L*gpu_memory,
                                     block_size = NULL,
@@ -324,6 +341,7 @@ sits_encode.raster_cube <- function(data,
     .check_model_has_stats(encoder)
     .check_num_parameter(memsize, exclusive_min = 0)
     .check_int_parameter(multicores, min = 1L)
+    .check_int_parameter(threads, min = 1L, allow_null = TRUE)
     .check_int_parameter(gpu_memory, min = 1L)
     .check_batch_size(batch_size)
     .check_block_size(block_size, data)
@@ -337,6 +355,9 @@ sits_encode.raster_cube <- function(data,
     # Check torch version model compatibility
     if (.ml_is_torch_model(encoder)) {
         .check_torch_model_version(encoder)
+        # torch starts one thread per visible core, many more than the quota
+        restore_threads <- .torch_set_threads(threads)
+        on.exit(restore_threads(), add = TRUE)
     }
     # Spatial filter
     if (.has(roi)) {
