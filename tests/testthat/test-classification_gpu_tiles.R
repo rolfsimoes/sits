@@ -183,6 +183,37 @@ test_that("the dataloader path skips done tiles and recovered blocks", {
                    na.rm = TRUE), 1L)
 })
 
+test_that("a stack classifies all tiles with one dataloader", {
+    skip_on_cran()
+    skip_if_not_installed("torch")
+    skip_if_not_installed("luz")
+    root <- file.path(tempdir(), "gpu_tiles_stack")
+    unlink(root, recursive = TRUE)
+    on.exit(unlink(root, recursive = TRUE), add = TRUE)
+    cube <- gpu_tiles_cube(root)
+    models <- list(a = gpu_tiles_model(101L), b = gpu_tiles_model(202L))
+    stack <- sits_stack_model(a = models[["a"]], b = models[["b"]])
+    dirs <- c(a = file.path(root, "a"), b = file.path(root, "b"),
+              ref = file.path(root, "ref"))
+    for (d in dirs) dir.create(d)
+    gpu <- classify_gpu_tiles(TRUE, cube, stack, dirs[c("a", "b")])
+    expect_equal(gpu[["n_loaders"]], 1L)
+    expect_named(gpu[["probs"]], c("a", "b"))
+    for (name in c("a", "b")) {
+        ref <- classify_gpu_tiles(FALSE, cube, models[[name]], dirs[["ref"]],
+                                  version = name)
+        probs <- gpu[["probs"]][[name]]
+        expect_equal(probs[["tile"]], c("A", "B"))
+        expect_equal(unique(dirname(.fi(probs)[["path"]])),
+                     unname(dirs[[name]]))
+        for (tile in c("A", "B")) {
+            expect_lte(max(abs(tile_values(probs, tile) -
+                               tile_values(ref[["probs"]], tile)),
+                           na.rm = TRUE), 1L)
+        }
+    }
+})
+
 test_that("a tile is merged after its last deferred block is written", {
     skip_on_cran()
     skip_if_not_installed("torch")

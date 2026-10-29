@@ -359,7 +359,12 @@ sits_classify.raster_cube <- function(data,
     .check_int_parameter(gpu_memory, min = 1L)
     .check_batch_size(batch_size)
     .check_block_size(block_size, data)
-    .check_output_dir(output_dir)
+    # a stack writes each model to its own dir
+    if (inherits(ml_model, "stack_model")) {
+        output_dir <- .stack_output_dir(output_dir, ml_model)
+    } else {
+        .check_output_dir(output_dir)
+    }
     # preconditions - impute and filter functions
     .check_function(impute_fn)
     # version is case-insensitive in sits
@@ -463,7 +468,7 @@ sits_classify.raster_cube <- function(data,
         workers = multicores,
         export_vars = "ml_model",
         log = verbose,
-        output_dir = output_dir
+        output_dir = output_dir[[1L]]
     )
     on.exit(.parallel_stop(
         started = started,
@@ -482,7 +487,7 @@ sits_classify.raster_cube <- function(data,
     }
     # Process each tile sequentially (CPU)
     classify_tile <- function(tile) {
-        # Define the name of the output file
+        # Define the name of the output file (one per model of a stack)
         out_file <- .classify_out_file(
             tile = tile,
             ml_model = ml_model,
@@ -508,7 +513,7 @@ sits_classify.raster_cube <- function(data,
             roi = roi,
             exclusion_mask = exclusion_mask,
             impute_fn = impute_fn,
-            output_dir = output_dir,
+            output_dir = output_dir[[1L]],
             version = version,
             verbose = verbose,
             progress = progress
@@ -534,15 +539,23 @@ sits_classify.raster_cube <- function(data,
             roi = roi,
             exclusion_mask = exclusion_mask,
             impute_fn = impute_fn,
-            output_dir = output_dir,
+            output_dir = output_dir[[1L]],
             version = version,
             verbose = verbose,
             progress = progress
         )
-    } else {
+    } else if (!inherits(ml_model, "stack_model")) {
         return(.cube_foreach_tile(data, classify_tile))
+    } else {
+        tiles <- slider::slide(data, classify_tile)
     }
-    .map_dfr(tiles, identity)
+    if (!inherits(ml_model, "stack_model")) {
+        return(.map_dfr(tiles, identity))
+    }
+    # a stack gives one probs cube per model
+    lapply(stats::setNames(nm = names(output_dir)), function(name) {
+        .map_dfr(tiles, function(tile) tile[[name]])
+    })
 }
 #' @title   Classify a segmented data cube
 #' @name sits_classify.vector_cube

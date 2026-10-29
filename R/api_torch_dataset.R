@@ -114,13 +114,21 @@
 #' @keywords internal
 #' @noRd
 #' @description Does on the device what .ml_normalize does for a torch
-#' model (the softmax), then applies the offset and scale of the probs
-#' band, so the host receives integers.
+#' model (one softmax) or a stack (one softmax per model), then applies
+#' the offset and scale of the probs band, so the host receives integers.
 #'
+#' @param labels    Model labels; a stack prefixes them by "model:".
+#' @param stack     Is the model a stack?
 #' @param band_conf Band configuration of the probs cube.
 #'
 #' @return A function of the output tensor that returns an integer tensor.
-.torch_probs_on_device <- function(band_conf) {
+.torch_probs_on_device <- function(labels, stack, band_conf) {
+    groups <- if (stack) sub(":.*$", "", labels) else rep("", length(labels))
+    # each model of a stack owns one run of columns
+    runs <- rle(groups)
+    .check_that(!anyDuplicated(runs[["values"]]))
+    starts <- cumsum(c(1L, utils::head(runs[["lengths"]], -1L)))
+    lengths <- runs[["lengths"]]
     offset <- .default(.offset(band_conf), 0.0)
     scale <- .default(.scale(band_conf), 1.0)
     # 16-bit integers halve the bytes copied to the host
@@ -131,7 +139,13 @@
     function(values) {
         # .ml_normalize turns NA into 0 before the softmax
         values <- values$masked_fill(torch::torch_isnan(values), 0.0)
-        probs <- torch::nnf_softmax(values, dim = 2L)
+        probs <- torch::torch_cat(lapply(seq_along(starts), function(i) {
+            torch::nnf_softmax(
+                values$narrow(dim = 2L, start = starts[[i]],
+                              length = lengths[[i]]),
+                dim = 2L
+            )
+        }), dim = 2L)
         torch::torch_round((probs - offset) / scale)$to(dtype = dtype)
     }
 }
@@ -495,11 +509,12 @@
 #' device computes block i; the last block is written at the end.
 #'
 #' @param output_dir A character with output directory.
-#' @param out_file   A list with the output file of each tile.
+#' @param out_file   A list with the output file(s) of each tile.
 #' @param out_band   A character vector with output band.
 #' @param band_conf  A list with band config.
 #' @param ml_labels  A character vector with model labels.
 #' @param crs        A character with the crs of each tile.
+#' @param ml_model   The model; a stack writes one file per model.
 #' @param on_block   Function called with the tile index and the block
 #'                   files after each block is written.
 #'
@@ -510,13 +525,15 @@
                                     band_conf,
                                     ml_labels,
                                     crs,
+                                    ml_model = NULL,
                                     on_block = NULL) {
     callback <- luz::luz_callback(
         name = ".callback_post_classify",
         initialize = function(output_dir, out_file, out_band, band_conf,
-                              ml_labels, crs, on_block) {
+                              ml_labels, crs, ml_model, on_block) {
             self$output_dir <- output_dir
             self$on_block <- on_block
+            self$ml_model <- ml_model
             self$out_file <- out_file
             self$out_band <- out_band
             self$band_conf <- band_conf
@@ -524,6 +541,8 @@
             self$crs <- crs
             # read by .torch_predict_chunks
             self$device_post <- .torch_probs_on_device(
+                labels = ml_labels,
+                stack = inherits(ml_model, "stack_model"),
                 band_conf = band_conf
             )
             self$pending <- NULL
@@ -607,7 +626,8 @@
                 block = pending[["block"]],
                 output_dir = self$output_dir,
                 out_file = self$out_file[[pending[["tile_index"]]]],
-                out_band = self$out_band
+                out_band = self$out_band,
+                ml_model = self$ml_model
             )
             ctx$pred[[pending[["index"]]]] <- block_file
             # the caller merges the tile once its last block is written
@@ -625,6 +645,7 @@
         band_conf = band_conf,
         ml_labels = ml_labels,
         crs = crs,
+        ml_model = ml_model,
         on_block = on_block
     )
 }

@@ -94,7 +94,8 @@
     # Process jobs in parallel - one job per chunk
     # In parallel processing the model was exported once to the workers'
     # global environment; in sequential processing it is passed directly
-    block_files <- .jobs_map_parallel_chr(
+    # a job returns one block file per model of a stack
+    block_files <- unlist(.jobs_map_parallel(
         jobs = chunks,
         fn = .classify_chunk_cpu,
         tile = tile,
@@ -106,52 +107,27 @@
         out_file = out_file,
         ml_model = if (.parallel_is_open()) NULL else ml_model,
         progress = progress
-    )
-    # Merge blocks into a new probs_cube tile
-    # If ROI exists, blocks are merged to a different directory
-    # than output_dir, which is used to save the final cropped version
-    merge_out_file <- out_file
-    if (.has(roi)) {
-        merge_out_file <- .file_derived_name(
-            tile = tile,
-            band = out_band,
-            version = version,
-            output_dir = file.path(output_dir, ".sits")
-        )
-    }
-    probs_tile <- .tile_derived_merge_blocks(
-        file = merge_out_file,
-        band = out_band,
-        labels = .ml_labels_code(ml_model),
-        base_tile = tile,
+    ))
+    # Merge blocks into a new probs_cube tile (one per model of a stack),
+    # cropped when there is a ROI
+    probs_tile <- .classify_merge(
+        tile = tile,
+        out_file = out_file,
         block_files = block_files,
-        derived_class = "probs_cube",
-        multicores = .jobs_multicores(),
-        update_bbox = update_bbox
+        ml_model = ml_model,
+        out_band = out_band,
+        version = version,
+        roi = roi,
+        update_bbox = update_bbox,
+        progress = progress
     )
-    # if there is a ROI, crop the probability cube
-    if (.has(roi)) {
-        probs_tile_crop <- .crop(
-            cube = probs_tile,
-            roi = roi,
-            output_dir = output_dir,
-            multicores = 1L,
-            progress = progress
-        )
-        unlink(.fi_paths(.fi(probs_tile)))
-    }
     # show final time for classification
     .tile_classif_end(
         tile = tile,
         start_time = tile_start_time,
         verbose = verbose
     )
-    # Return probs tile (cropped version in case of ROI)
-    if (.has(roi)) {
-        probs_tile_crop
-    } else {
-        probs_tile
-    }
+    probs_tile
 }
 #' @title Classify a tile of raster data in GPU using multicores
 #' @name .classify_tile_gpu
@@ -166,7 +142,7 @@
 #' @param  tile            Single tile of a data cube.
 #' @param  out_file        Name of the output probabibility file.
 #' @inheritParams .classify_tiles_gpu
-#' @return The probs tile.
+#' @return The probs tile (a named list of tiles for a stack).
 .classify_tile_gpu <- function(tile,
                                out_band,
                                out_file,
@@ -211,11 +187,11 @@
 #' as soon as its last block is written, in the order of the tiles, while
 #' the workers read the next blocks.
 #'
-#' A tile whose probs file exists is not classified again; the valid
+#' A tile whose probs files exist is not classified again; the valid
 #' block files of a tile are not computed again.
 #'
 #' @param  tiles           Data cube with the tiles to classify.
-#' @param  out_files       List with the probs file of each tile.
+#' @param  out_files       List with the probs file(s) of each tile.
 #' @param  out_band        Band to be produced.
 #' @param  bands           Bands to extract time series
 #' @param  base_bands      Base bands to extract values
@@ -228,7 +204,8 @@
 #' @param  version         Version of result.
 #' @param  verbose         Print processing information?
 #' @param  progress        Show progress bar?
-#' @return List with the probs tile of each tile.
+#' @return List with the probs tile of each tile (for a stack, a named
+#'   list of tiles, one per model).
 .classify_tiles_gpu <- function(tiles,
                                 out_files,
                                 out_band,
@@ -245,7 +222,7 @@
                                 progress) {
     n_tiles <- nrow(tiles)
     probs_tiles <- vector("list", n_tiles)
-    # A tile whose probs file exists is built from it
+    # A tile whose probs files exist is built from them
     done <- vapply(out_files, function(f) all(file.exists(f)), logical(1L))
     for (i in which(done)) {
         .check_recovery()
@@ -286,8 +263,8 @@
             if (n_pending[[i]] > 0L) {
                 return(invisible(NULL))
             }
-            # Merge blocks into a new probs_cube tile, cropped when there
-            # is a ROI
+            # Merge blocks into a new probs_cube tile (one per model of a
+            # stack), cropped when there is a ROI
             probs_tiles[[i]] <<- .classify_merge(
                 tile = tile,
                 out_file = out_files[[i]],
@@ -360,6 +337,7 @@
             band_conf = band_conf,
             ml_labels = .ml_labels(ml_model),
             crs = slider::slide_chr(tiles, .tile_crs),
+            ml_model = ml_model,
             on_block = on_block
         )
         # Classify!
@@ -385,7 +363,7 @@
 #' @keywords internal
 #' @noRd
 #' @param  tile            Single tile of a data cube.
-#' @param  out_file        Probs file of the tile.
+#' @param  out_file        Probs file(s) of the tile.
 #' @param  block           Optimized block to be read into memory.
 #' @param  roi             Region of interest.
 #' @param  exclusion_mask  Area to be excluded from classification
@@ -429,7 +407,7 @@
         # Update bbox to account for ROI
         update_bbox <- nrow(chunks) != nchunks
     }
-    # Regenerate all block files
+    # Regenerate all block files (one per model of a stack)
     block_files_all <- slider::slide(chunks, function(chunk) {
         .classify_block_files(out_file = out_file, block = .block(chunk))
     })
@@ -443,15 +421,25 @@
         update_bbox = update_bbox
     )
 }
-#' @title Probs file of a tile
+#' @title Probs file of a tile: one per model of a stack, named by model
 #' @name .classify_out_file
 #' @keywords internal
 #' @noRd
+#' @description A stack names each file with its model name as version.
 .classify_out_file <- function(tile, ml_model, version, output_dir) {
-    .file_derived_name(
-        tile = tile, band = "probs", version = version,
-        output_dir = output_dir
-    )
+    if (!inherits(ml_model, "stack_model")) {
+        return(.file_derived_name(
+            tile = tile, band = "probs", version = version,
+            output_dir = output_dir
+        ))
+    }
+    models <- names(.stack_models(ml_model))
+    stats::setNames(vapply(models, function(name) {
+        .file_derived_name(
+            tile = tile, band = "probs", version = name,
+            output_dir = output_dir[[name]]
+        )
+    }, character(1L), USE.NAMES = FALSE), models)
 }
 #' @title Block files of the probs files of a tile, in their dirs
 #' @name .classify_block_files
@@ -465,69 +453,82 @@
         )
     }, character(1L), USE.NAMES = FALSE), names(out_file))
 }
-#' @title Probs tile from its file
+#' @title Probs tile from its files: a named list of tiles for a stack
 #' @name .classify_tile_from_files
 #' @keywords internal
 #' @noRd
 .classify_tile_from_files <- function(out_file, tile, ml_model) {
-    .tile_derived_from_file(
-        file = out_file,
-        band = "probs",
-        base_tile = tile,
-        labels = .ml_labels_code(ml_model),
-        derived_class = "probs_cube",
-        update_bbox = TRUE
-    )
+    one <- function(file, model) {
+        .tile_derived_from_file(
+            file = file,
+            band = "probs",
+            base_tile = tile,
+            labels = .ml_labels_code(model),
+            derived_class = "probs_cube",
+            update_bbox = TRUE
+        )
+    }
+    if (!inherits(ml_model, "stack_model")) {
+        return(one(out_file, ml_model))
+    }
+    Map(one, out_file, .stack_models(ml_model)[names(out_file)])
 }
-#' @title Merge the blocks of a tile into its probs file
+#' @title Merge the blocks of a tile into its probs files
 #' @name .classify_merge
 #' @keywords internal
 #' @noRd
-#' @description With a ROI, the merged file goes to .sits and is cropped
-#'   into its dir.
+#' @description One probs tile, or a named list of tiles for a stack. With
+#'   a ROI, the merged file goes to .sits and is cropped into its dir.
 .classify_merge <- function(tile, out_file, block_files, ml_model, out_band,
                             version, roi, update_bbox, progress) {
-    merge_out_file <- out_file
-    if (.has(roi)) {
-        merge_out_file <- .file_derived_name(
-            tile = tile,
+    one <- function(file, blocks, model, file_version) {
+        merge_out_file <- file
+        if (.has(roi)) {
+            merge_out_file <- .file_derived_name(
+                tile = tile,
+                band = out_band,
+                version = file_version,
+                output_dir = file.path(dirname(file), ".sits")
+            )
+        }
+        probs_tile <- .tile_derived_merge_blocks(
+            file = merge_out_file,
             band = out_band,
-            version = version,
-            output_dir = file.path(dirname(out_file), ".sits")
+            labels = .ml_labels_code(model),
+            base_tile = tile,
+            block_files = blocks,
+            derived_class = "probs_cube",
+            multicores = .jobs_multicores(),
+            update_bbox = update_bbox
         )
+        if (!.has(roi)) {
+            return(probs_tile)
+        }
+        probs_tile_crop <- .crop(
+            cube = probs_tile,
+            roi = roi,
+            output_dir = dirname(file),
+            multicores = 1L,
+            progress = progress
+        )
+        unlink(.fi_paths(.fi(probs_tile)))
+        probs_tile_crop
     }
-    probs_tile <- .tile_derived_merge_blocks(
-        file = merge_out_file,
-        band = out_band,
-        labels = .ml_labels_code(ml_model),
-        base_tile = tile,
-        block_files = unname(block_files),
-        derived_class = "probs_cube",
-        multicores = .jobs_multicores(),
-        update_bbox = update_bbox
-    )
-    if (!.has(roi)) {
-        return(probs_tile)
+    if (!inherits(ml_model, "stack_model")) {
+        return(one(out_file, unname(block_files), ml_model, version))
     }
-    probs_tile_crop <- .crop(
-        cube = probs_tile,
-        roi = roi,
-        output_dir = dirname(out_file),
-        multicores = 1L,
-        progress = progress
-    )
-    unlink(.fi_paths(.fi(probs_tile)))
-    probs_tile_crop
+    models <- .stack_models(ml_model)
+    stats::setNames(lapply(names(out_file), function(name) {
+        one(out_file[[name]], unname(block_files[names(block_files) == name]),
+            models[[name]], name)
+    }), names(out_file))
 }
-.classify_write_block <- function(values, block, output_dir, out_file, out_band) {
+.classify_write_block <- function(values, block, output_dir, out_file, out_band,
+                                  ml_model = NULL) {
     # Get block geometry
     block_geom <- .block(block)
-    # Create a temporary block file name
-    block_file <- .file_block_name(
-        pattern = .file_pattern(out_file),
-        block = block_geom,
-        output_dir = output_dir
-    )
+    # Create temporary block file names (one per model of a stack)
+    block_file <- .classify_block_files(out_file = out_file, block = block_geom)
     # Resume processing in case of failure
     if (all(.raster_is_valid(block_file))) {
         return(block_file)
@@ -544,13 +545,13 @@
         value = block_file
     )
     # Prepare and save results as raster
-    .raster_write_block(
+    .classify_block_write(
         files = block_file,
+        values = values,
+        ml_model = ml_model,
         block = block_geom,
         bbox = .bbox(block),
-        values = values,
-        data_type = .data_type(band_conf),
-        missing_value = .miss_value(band_conf),
+        band_conf = band_conf,
         crop_block = block[["mask"]]
     )
     # Log end of block saving
@@ -924,12 +925,8 @@
     }
     # Retrive block to be processed
     block <- .block(chunk)
-    # Create a temporary block file name
-    block_file <- .file_block_name(
-        pattern = .file_pattern(out_file),
-        block = block,
-        output_dir = output_dir
-    )
+    # Create temporary block file names (one per model of a stack)
+    block_file <- .classify_block_files(out_file = out_file, block = block)
     # Resume processing in case of failure
     if (all(.raster_is_valid(block_file))) {
         return(block_file)
@@ -1002,13 +999,13 @@
         value = block_file
     )
     # Prepare and save results as raster
-    .raster_write_block(
+    .classify_block_write(
         files = block_file,
+        values = full_values,
+        ml_model = ml_model,
         block = block,
         bbox = .bbox(chunk),
-        values = full_values,
-        data_type = .data_type(band_conf),
-        missing_value = .miss_value(band_conf),
+        band_conf = band_conf,
         crop_block = chunk[["mask"]]
     )
     # Log end of block saving
