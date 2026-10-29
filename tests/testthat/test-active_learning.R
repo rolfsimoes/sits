@@ -261,3 +261,43 @@ test_that("uncertainty sampling returns correct values at sample coordinates", {
     # Clean up
     unlink(raster_path)
 })
+test_that("uncertainty sampling does not depend on multicores", {
+    # random entropy, 4096 x 4096 pixels in blocks of 256
+    data_dir <- file.path(tempdir(), "entropy_random")
+    dir.create(data_dir, showWarnings = FALSE)
+    set.seed(22L)
+    r <- terra::rast(
+        nrows = 4096L, ncols = 4096L, xmin = 0, xmax = 122880,
+        ymin = 0, ymax = 122880, crs = "EPSG:32723"
+    )
+    terra::values(r) <- sample.int(10000L, terra::ncell(r), TRUE)
+    terra::writeRaster(
+        r,
+        file.path(
+            data_dir,
+            "LANDSAT_OLI_000000_2020-01-01_2020-12-31_entropy_v1.tif"
+        ),
+        datatype = "INT2U", overwrite = TRUE,
+        gdal = c("TILED=YES", "BLOCKXSIZE=256", "BLOCKYSIZE=256")
+    )
+    cube <- sits_cube(
+        source = "BDC", collection = "LANDSAT-OLI-16D", data_dir = data_dir,
+        bands = "entropy", version = "v1",
+        parse_info = c("X1", "X2", "tile", "start_date", "end_date",
+                       "band", "version"),
+        progress = FALSE
+    )
+    run <- function(multicores, memsize) {
+        set.seed(6L)
+        s <- sits_uncertainty_sampling(
+            cube, n = 500L, min_uncert = 0.4, sampling_window = 10L,
+            multicores = multicores, memsize = memsize
+        )
+        sort(paste(s[["longitude"]], s[["latitude"]]))
+    }
+    a <- run(multicores = 2L, memsize = 1L)
+    expect_identical(length(a), 500L)
+    expect_identical(run(multicores = 1L, memsize = 1L), a)
+    expect_identical(run(multicores = 1L, memsize = 4L), a)
+    unlink(data_dir, recursive = TRUE)
+})

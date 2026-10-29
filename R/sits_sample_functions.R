@@ -551,6 +551,13 @@ sits_sampling_design <- function(cube,
 #' @param  memsize              Memory available for sampling.
 #' @param  shp_file             Name of shapefile to be saved (optional)
 #' @param progress              Show progress bar? Default is TRUE.
+#' @param  seed                 Integer, or a L'Ecuyer-CMRG state (the
+#'                              integer vector of length 7 of
+#'                              \code{.Random.seed}). With \code{NULL}, the
+#'                              draw follows the global generator, so
+#'                              \code{set.seed()} repeats it. The same seed
+#'                              gives the same points for any
+#'                              \code{multicores} and \code{memsize}.
 #' @return samples              Point sf object with required samples and label
 #'
 #' @examples
@@ -603,7 +610,8 @@ sits_stratified_sampling <- function(cube,
                                      multicores = 2L,
                                      memsize = 2L,
                                      shp_file = NULL,
-                                     progress = TRUE) {
+                                     progress = TRUE,
+                                     seed = NULL) {
     .check_set_caller("sits_stratified_sampling")
     # check the cube is valid
     .check_raster_cube_files(cube)
@@ -674,6 +682,9 @@ sits_stratified_sampling <- function(cube,
     # Prepare parallel processing
     started <- .parallel_start(workers = multicores)
     on.exit(.parallel_stop(started), add = TRUE)
+    # Draw from the stream of this call
+    rng_exit <- .rng_enter(seed)
+    on.exit(rng_exit(), add = TRUE)
     # call function to allocate sample per strata
     samples <- .samples_alloc_strata(
         cube = cube,
