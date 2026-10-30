@@ -211,7 +211,7 @@ sits_ssl_barlow_twins <- function(samples          = NULL,
         # ------------------------------------------------------------------
         # Define Barlow Twins model: shared encoder + projector head
         # ------------------------------------------------------------------
-        barlow_twins_model <- torch::nn_module(
+        barlow_twins_model <- .torch_module(
             classname = "ssl_barlow_twins_model",
 
             initialize = function(encoder, embedding_dim, proj_dim = 128L,
@@ -351,7 +351,6 @@ sits_ssl_barlow_twins <- function(samples          = NULL,
             } else {
                 # Transform input into a 3D tensor
                 n_samples <- nrow(values)
-                n_times <- .samples_ntimes(samples)
                 n_bands <- length(bands)
                 # Performs data normalization on CPU
                 values <- .pred_features_normalize(pred = values, stats = ml_stats)
@@ -377,6 +376,11 @@ sits_ssl_barlow_twins <- function(samples          = NULL,
         predict_fun <- .set_class(
             predict_fun, "sits_encoder", "torch_model", "sits_model",
             class(predict_fun)
+        )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(
+            predict_fun, samples, embedding_dim = embedding_dim,
+            keep = "torch_seed"
         )
     }
     # If samples is provided, train immediately; otherwise return train_fun

@@ -107,6 +107,8 @@ sits_rfor <- function(samples = NULL, num_trees = 100L, mtry = NULL, classwt = N
         predict_fun <- .set_class(
             predict_fun, "rfor_model", "sits_model", class(predict_fun)
         )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(predict_fun, samples)
         predict_fun
     }
     # If samples is informed, train a model and return a predict function
@@ -230,10 +232,6 @@ sits_lightgbm <- function(samples = NULL,
             verbose = -1,
             ...
         )
-        # remove data used for training
-        force(rm(train_samples, test_samples,
-                 lgbm_train_samples, lgbm_test_samples))
-        gc()
         # serialize the model for parallel processing
         lgbm_model_string <- lgbm_model$save_model_to_string(NULL)
         # construct model predict closure function and returns
@@ -256,6 +254,8 @@ sits_lightgbm <- function(samples = NULL,
         class(predict_fun) <- c("lightgbm_model",
                                 "sits_model",
                                 class(predict_fun))
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(predict_fun, samples)
         return(predict_fun)
     }
     .factory_function(samples, train_fun)
@@ -383,6 +383,8 @@ sits_svm <- function(samples = NULL, formula = sits_formula_linear(),
         predict_fun <- .set_class(
             predict_fun, "svm_model", "sits_model", class(predict_fun)
         )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(predict_fun, samples)
         predict_fun
     }
     # If samples is informed, train a model and return a predict function
@@ -530,6 +532,8 @@ sits_xgboost <- function(samples = NULL,
         predict_fun <- .set_class(
             predict_fun, "xgb_model", "sits_model", class(predict_fun)
         )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(predict_fun, samples)
         predict_fun
     }
     # If samples is informed, train a model and return a predict function

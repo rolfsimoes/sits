@@ -223,7 +223,7 @@ sits_ssl_vicreg <- function(samples          = NULL,
         # ------------------------------------------------------------------
         # Define VICReg model: shared encoder + projector head
         # ------------------------------------------------------------------
-        vicreg_model <- torch::nn_module(
+        vicreg_model <- .torch_module(
             classname = "vicreg_model",
 
             initialize = function(encoder, embedding_dim, proj_dim = 128L,
@@ -366,7 +366,6 @@ sits_ssl_vicreg <- function(samples          = NULL,
             } else {
                 # Transform input into a 3D tensor
                 n_samples <- nrow(values)
-                n_times <- .samples_ntimes(samples)
                 n_bands <- length(bands)
                 # Performs data normalization on CPU
                 values <- .pred_features_normalize(pred = values, stats = ml_stats)
@@ -392,6 +391,11 @@ sits_ssl_vicreg <- function(samples          = NULL,
         predict_fun <- .set_class(
             predict_fun, "sits_encoder", "torch_model", "sits_model",
             class(predict_fun)
+        )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(
+            predict_fun, samples, embedding_dim = embedding_dim,
+            keep = "torch_seed"
         )
     }
     # If samples is provided, train immediately; otherwise return train_fun

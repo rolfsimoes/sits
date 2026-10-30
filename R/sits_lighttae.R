@@ -254,7 +254,7 @@ sits_lighttae <- function(samples = NULL,
         torch_seed <- .torch_set_seed(seed)
 
         # Define the L-TAE architecture
-        light_tae_model <- torch::nn_module(
+        light_tae_model <- .torch_module(
             classname = "model_ltae",
             initialize = function(n_bands,
                                   n_labels,
@@ -370,12 +370,6 @@ sits_lighttae <- function(samples = NULL,
                 dataloader_options = list(batch_size = batch_size),
                 verbose = verbose
             )
-        # remove data used for training
-        force(rm(
-            train_samples, test_samples,
-            train_y, train_x, test_y, test_x
-        ))
-        gc()
         # Serialize model
         serialized_model <- .torch_serialize_model(torch_model$model)
         # Function that predicts labels of input values
@@ -401,7 +395,6 @@ sits_lighttae <- function(samples = NULL,
             } else {
                 # Transform input into a 3D tensor
                 n_samples <- nrow(values)
-                n_times <- .samples_ntimes(samples)
                 n_bands <- length(bands)
                 # Performs data normalization
                 values <- .pred_features_normalize(values, stats = ml_stats)
@@ -424,6 +417,10 @@ sits_lighttae <- function(samples = NULL,
         # Set model class
         predict_fun <- .set_class(
             predict_fun, "torch_model", "sits_model", class(predict_fun)
+        )
+        # keep in the model only what prediction reads
+        predict_fun <- .ml_compact(
+            predict_fun, samples, keep = "torch_seed"
         )
     }
     # If samples is informed, train a model and return a predict function

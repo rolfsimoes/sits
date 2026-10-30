@@ -466,7 +466,7 @@
     # Compute the breaks in time for multiyear embedding
     class_info <- .timeline_class_info(
         data = samples,
-        samples = .ml_samples(encoder)
+        ml_model = encoder
     )
     # Split long time series of samples in a set of small time series
     if (length(class_info[["dates_index"]][[1L]]) > 1L) {
@@ -688,7 +688,7 @@
     # Get bands prefix
     bands_prefix <- .conf("embedding_band_prefix")
     # Generate embedding name
-    embedding_dim <- seq_len(environment(encoder)[["embedding_dim"]])
+    embedding_dim <- seq_len(.ml_metadata(encoder)[["embedding_dim"]])
     # Prefixing embedding with zero
     embedding_dim <- ifelse(
         test = embedding_dim < 10,
@@ -878,7 +878,7 @@
 #' @noRd
 #' @param  encoder    Encoder model
 .encode_embedding_dim <- function(encoder) {
-    environment(encoder)[["embedding_dim"]]
+    .ml_metadata(encoder)[["embedding_dim"]]
 }
 #' @title Read a block of values from a set of raster images
 #' @name .encode_merge_blocks
