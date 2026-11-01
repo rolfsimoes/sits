@@ -107,7 +107,7 @@ sits_rfor <- function(samples = NULL, num_trees = 100L, mtry = NULL, classwt = N
         predict_fun <- .set_class(
             predict_fun, "rfor_model", "sits_model", class(predict_fun)
         )
-        predict_fun
+        .ml_model_compact(predict_fun)
     }
     # If samples is informed, train a model and return a predict function
     # Otherwise give back a train function to train model further
@@ -256,7 +256,7 @@ sits_lightgbm <- function(samples = NULL,
         class(predict_fun) <- c("lightgbm_model",
                                 "sits_model",
                                 class(predict_fun))
-        return(predict_fun)
+        return(.ml_model_compact(predict_fun))
     }
     .factory_function(samples, train_fun)
 }
@@ -383,7 +383,7 @@ sits_svm <- function(samples = NULL, formula = sits_formula_linear(),
         predict_fun <- .set_class(
             predict_fun, "svm_model", "sits_model", class(predict_fun)
         )
-        predict_fun
+        .ml_model_compact(predict_fun)
     }
     # If samples is informed, train a model and return a predict function
     # Otherwise give back a train function to train model further
@@ -530,7 +530,7 @@ sits_xgboost <- function(samples = NULL,
         predict_fun <- .set_class(
             predict_fun, "xgb_model", "sits_model", class(predict_fun)
         )
-        predict_fun
+        .ml_model_compact(predict_fun)
     }
     # If samples is informed, train a model and return a predict function
     # Otherwise give back a train function to train model further

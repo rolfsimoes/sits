@@ -422,7 +422,7 @@ sits_classify.raster_cube <- function(data,
     # Retrieve the samples from the model
     samples <- .ml_samples(ml_model)
     # Do the samples and tile match their timeline length?
-    .check_match_timeline(samples = samples, tile = data)
+    .check_match_timeline(timeline = .ml_timeline(ml_model), tile = data)
     # Do the samples and tile match their bands?
     .check_match_bands(samples = samples, tile = data)
 
@@ -814,7 +814,7 @@ sits_classify.vector_cube <- function(data,
     # Retrieve the samples from the model
     samples <- .ml_samples(ml_model)
     # Do the samples and tile match their timeline length?
-    .check_match_timeline(samples = samples, tile = data)
+    .check_match_timeline(timeline = .ml_timeline(ml_model), tile = data)
     # Do the samples and tile match their bands?
     .check_match_bands(samples = samples, tile = data)
 

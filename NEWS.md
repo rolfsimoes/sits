@@ -145,6 +145,9 @@ remove deprecated functions. The highlights below are grouped by theme.
 * Fix the recovery of a dead parallel worker: the new worker gets the
   setup and exported variables of the others, and the job of the dead
   worker is sent again
+* Trained models and encoders keep no training data: a model keeps the
+  objects its prediction reads and the first sample of each label; the size
+  of a deep learning model no longer grows with the number of samples
 
 # What's new in SITS version 1.5
 
