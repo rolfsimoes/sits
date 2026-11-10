@@ -266,3 +266,22 @@ test_that("sits_smooth selects CPU and torch implementations", {
     max_diff <- max(abs(cpp_vals[pix, ] - torch_vals[pix, ]))
     expect_lt(max_diff, 5.0)
 })
+test_that("Torch device - CUDA, XPU, MPS and CPU", {
+    skip_if_not_installed("torch")
+    device <- function(cuda, xpu, mps, gpu = TRUE) {
+        local_mocked_bindings(
+            .torch_gpu_available = function() gpu,
+            .torch_xpu_enabled = function() xpu
+        )
+        local_mocked_bindings(
+            cuda_is_available = function() cuda,
+            backends_mps_is_available = function() mps,
+            .package = "torch"
+        )
+        .torch_device()
+    }
+    expect_identical(device(TRUE, TRUE, TRUE), "cuda")
+    expect_identical(device(FALSE, TRUE, TRUE), "xpu")
+    expect_identical(device(FALSE, FALSE, TRUE), "mps")
+    expect_identical(device(TRUE, TRUE, TRUE, gpu = FALSE), "cpu")
+})

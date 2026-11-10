@@ -75,15 +75,7 @@
                                          smoothness,
                                          neigh_fraction) {
     # Select device
-    device <- if (.torch_gpu_available()) {
-        if (torch::cuda_is_available()) {
-            "cuda"
-        } else {
-            "mps"
-        }
-    } else {
-        "cpu"
-    }
+    device <- .torch_device()
 
     # Number of bands in data
     nbands <- ncol(logits)

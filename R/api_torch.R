@@ -575,6 +575,24 @@
     }
     getExportedValue("torch", "xpu_is_available")()
 }
+#' @title Torch device of a GPU operation
+#' @name .torch_device
+#' @keywords internal
+#' @noRd
+#' @description CUDA comes first, then XPU, then MPS.
+#' @return "cuda", "xpu", "mps", or "cpu" when no GPU is available.
+.torch_device <- function() {
+    if (!.torch_gpu_available()) {
+        return("cpu")
+    }
+    if (torch::cuda_is_available()) {
+        return("cuda")
+    }
+    if (.torch_xpu_enabled()) {
+        return("xpu")
+    }
+    "mps"
+}
 #' @title Verify if CUDA is available
 #' @name .torch_cuda_enabled
 #' @author Gilberto Camara, \email{gilberto.camara@@inpe.br}
@@ -638,19 +656,17 @@
 #' @description Restore a serialized torch model stored in a model closure.
 #' @param ml_model A sits model closure.
 #'
-#' @return Send model either to cuda or mps devices.
+#' @return Called for side effects: the model goes to \code{.torch_device()}.
 .torch_model_to_device <- function(ml_model) {
     if (!.ml_is_torch_model(ml_model)) {
         return(invisible(NULL))
     }
-    torch_model <- .ml_model(ml_model)
-    if (torch::cuda_is_available()) {
-        torch_model$model <- torch_model$model$to(device = "cuda")
-    } else if (.torch_xpu_enabled()) {
-        torch_model$model <- torch_model$model$to(device = "xpu")
-    } else if (torch::backends_mps_is_available()) {
-        torch_model$model <- torch_model$model$to(device = "mps")
+    device <- .torch_device()
+    if (device == "cpu") {
+        return(invisible(NULL))
     }
+    torch_model <- .ml_model(ml_model)
+    torch_model$model <- torch_model$model$to(device = device)
     env <- environment(ml_model)
     env[["torch_model"]] <- torch_model
     invisible(NULL)
