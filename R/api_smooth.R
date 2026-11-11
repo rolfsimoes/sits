@@ -226,14 +226,16 @@
     # Check neigh_fraction
     .check_num_parameter(neigh_fraction, min = 0.1, max = 1.0)
 
+    prob_max <- .conf("smooth_prob_max")
+    prob_min <- .conf("smooth_prob_min")
     # Define smooth function
     smooth_fn <- function(values, block) {
         # Check values length
         input_pixels <- nrow(values)
         # Compute logit
         # adjust values to avoid -Inf or +Inf in logits
-        values[values == 1.0] <- 0.999999
-        values[values == 0.0] <- 0.000001
+        values[values == 1.0] <- prob_max
+        values[values == 0.0] <- prob_min
         # tranform to logits
         values <- log(values / (rowSums(values) - values))
         # Process Bayesian

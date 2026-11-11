@@ -24,12 +24,11 @@ test_that("torch bayes smoother matches C++ output (neigh_fraction = 1.0)", {
     )
 
     torch_result <- .torch_smooth_bayes_fraction(
-        logits         = logits,
-        nrows          = nrows,
-        ncols          = ncols,
-        window_size    = window_size,
-        smoothness     = smoothness,
-        neigh_fraction = neigh_fraction
+        logits     = logits,
+        nrows      = nrows,
+        ncols      = ncols,
+        smoothness = smoothness,
+        kernel     = .torch_smooth_kernel(window_size, neigh_fraction)
     )
 
     # Interior pixels (excluding the leg-width border) must match closely
@@ -69,12 +68,11 @@ test_that("torch bayes smoother matches C++ output (neigh_fraction = 0.5)", {
     )
 
     torch_result <- .torch_smooth_bayes_fraction(
-        logits         = logits,
-        nrows          = nrows,
-        ncols          = ncols,
-        window_size    = window_size,
-        smoothness     = smoothness,
-        neigh_fraction = neigh_fraction
+        logits     = logits,
+        nrows      = nrows,
+        ncols      = ncols,
+        smoothness = smoothness,
+        kernel     = .torch_smooth_kernel(window_size, neigh_fraction)
     )
 
     leg      <- window_size %/% 2L
@@ -86,6 +84,136 @@ test_that("torch bayes smoother matches C++ output (neigh_fraction = 0.5)", {
 
     max_diff <- max(abs(cpp_result[interior, ] - torch_result[interior, ]))
     expect_lt(max_diff, 1e-3)
+})
+
+test_that("compiled torch smoother matches the R tensor kernel", {
+    skip_if_not_installed("torch")
+    # R tensor kernel of sits dev (c8f8d744), the reference of the compiled one
+    r_kernel <- function(logits, nrows, ncols, window_size, smoothness,
+                         neigh_fraction) {
+        device <- "cpu"
+        nbands <- ncol(logits)
+        leg <- window_size %/% 2L
+        win_sq <- as.integer(window_size * window_size)
+        x <- torch::torch_tensor(
+            t(logits),
+            dtype  = torch::torch_float32(),
+            device = device
+        )$view(c(nbands, nrows, ncols))$unsqueeze(1L)
+        x_pad <- torch::nnf_pad(
+            x,
+            pad  = c(leg, leg, leg, leg),
+            mode = "reflect"
+        )
+        zero_t <- torch::torch_tensor(
+            0.0,
+            dtype = torch::torch_float32(),
+            device = device
+        )
+        neginf_t <- torch::torch_tensor(
+            -Inf,
+            dtype = torch::torch_float32(),
+            device = device
+        )
+        pos <- torch::torch_tensor(
+            seq_len(win_sq),
+            dtype  = torch::torch_float32(),
+            device = device
+        )$view(c(1L, win_sq))
+        x0_all <- torch::torch_tensor(
+            logits,
+            dtype = torch::torch_float32(),
+            device = device
+        )
+        band_results <- purrr::map(seq_len(nbands), function(b) {
+            x_b <- x_pad[, b, , , drop = FALSE]
+            wins_b <- torch::nnf_unfold(
+                x_b,
+                kernel_size = window_size,
+                stride      = 1L,
+                padding     = 0L
+            )$squeeze(1L)$t()
+            nan_mask_b <- torch::torch_isnan(wins_b)
+            if (neigh_fraction == 1.0) {
+                selected_b <- torch::torch_where(nan_mask_b, zero_t, wins_b)
+                sel_mask_b <- !nan_mask_b
+                n_b <- (!nan_mask_b)$sum(dim = -1L)$to(
+                    dtype = torch::torch_float32()
+                )
+            } else {
+                wins_sort_b <- torch::torch_where(nan_mask_b, neginf_t, wins_b)
+                sorted_b <- torch::torch_sort(
+                    wins_sort_b,
+                    dim = -1L,
+                    descending = TRUE
+                )[[1L]]
+                valid_b <- (!nan_mask_b)$sum(dim = -1L)$to(
+                    dtype = torch::torch_float32()
+                )
+                neigh_hi_b <- torch::torch_ceil(
+                    neigh_fraction * valid_b
+                )$clamp_min(1L)
+                sel_mask_b <- pos$le(neigh_hi_b$unsqueeze(-1L))
+                selected_b <- torch::torch_where(sel_mask_b, sorted_b, zero_t)
+                n_b        <- neigh_hi_b
+            }
+            m0_b <- selected_b$sum(dim = -1L) / n_b
+            diff_sq_b <- torch::torch_where(
+                sel_mask_b,
+                (selected_b - m0_b$unsqueeze(-1L))$pow(2L),
+                zero_t
+            )
+            s0_b <- torch::torch_where(
+                n_b$gt(1.0),
+                diff_sq_b$sum(dim = -1L) / (n_b - 1.0),
+                zero_t
+            )
+            x0_b    <- x0_all[, b]
+            w_b     <- s0_b / (s0_b + smoothness[b])
+            bayes_b <- w_b * x0_b + (1.0 - w_b) * m0_b
+            use_m0  <- torch::torch_isnan(x0_b) | s0_b$lt(1e-4)
+            torch::torch_where(use_m0, m0_b, bayes_b)
+        })
+        result <- torch::torch_stack(band_results, dim = 2L)
+        as.matrix(
+            result$cpu()$to(dtype = torch::torch_float64())
+        )
+    }
+    set.seed(7)
+    nrows <- 40L
+    ncols <- 30L
+    nbands <- 4L
+    window_size <- 7L
+    smoothness <- c(10.0, 20.0, 15.0, 25.0)
+    logits <- matrix(
+        runif(nrows * ncols * nbands, min = -3, max = 3),
+        nrow = nrows * ncols,
+        ncol = nbands
+    )
+    # a patch of NA smaller than the window and scattered NA pixels
+    na_patch <- as.vector(
+        outer(9:11, 15:17, FUN = function(r, c) r * ncols + c)
+    )
+    logits[c(na_patch, sample(nrows * ncols, 20L)), ] <- NA
+    purrr::walk(c(0.5, 1.0), function(neigh_fraction) {
+        r_result <- r_kernel(
+            logits         = logits,
+            nrows          = nrows,
+            ncols          = ncols,
+            window_size    = window_size,
+            smoothness     = smoothness,
+            neigh_fraction = neigh_fraction
+        )
+        compiled_result <- .torch_smooth_bayes_fraction(
+            logits     = logits,
+            nrows      = nrows,
+            ncols      = ncols,
+            smoothness = smoothness,
+            kernel     = .torch_smooth_kernel(window_size, neigh_fraction)
+        )
+        expect_equal(is.na(compiled_result), is.na(r_result))
+        expect_lt(max(abs(compiled_result - r_result), na.rm = TRUE), 1e-4)
+    })
 })
 
 test_that("torch smoother availability supports fallback and override", {
@@ -107,6 +235,23 @@ test_that("torch smoother availability supports fallback and override", {
     expect_true(smooth_available(functional = TRUE))
     expect_false(smooth_available(functional = FALSE))
     expect_false(smooth_available(functional = TRUE, force_cpp = "TRUE"))
+    # a kernel that does not compile gives the C++ smoother
+    old_doc_mode <- Sys.getenv("SITS_DOCUMENTATION_MODE")
+    Sys.setenv(SITS_DOCUMENTATION_MODE = "FALSE")
+    on.exit(Sys.setenv(SITS_DOCUMENTATION_MODE = old_doc_mode), add = TRUE)
+    testthat::local_mocked_bindings(
+        .torch_smooth_kernel = function(...) stop("no reflection_pad2d")
+    )
+    expect_warning(
+        fallback_fn <- .smooth_fn_bayes_torch(5L, 0.5, rep(20.0, 3L)),
+        .conf("messages", ".smooth_fn_bayes_torch"),
+        fixed = TRUE
+    )
+    cpp_fn <- .smooth_fn_bayes(5L, 0.5, rep(20.0, 3L))
+    set.seed(5)
+    values <- matrix(runif(300L), ncol = 3L)
+    block <- list(nrows = 10L, ncols = 10L)
+    expect_equal(fallback_fn(values, block), cpp_fn(values, block))
 })
 
 test_that("torch smoother accounts for materialized neighborhoods", {
