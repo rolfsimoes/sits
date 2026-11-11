@@ -29,31 +29,19 @@
     )
     # Resume feature
     if (all(.raster_is_valid(out_file, output_dir = output_dir))) {
-        .check_recovery()
-        probs_tile <- .tile_derived_from_file(
-            file = out_file,
-            band = band,
-            base_tile = tile,
-            labels = .tile_labels(tile),
-            derived_class = "probs_cube",
-            update_bbox = FALSE
-        )
-        return(probs_tile)
+        return(.smooth_tile_from_file(
+            tile = tile, band = band, out_file = out_file
+        ))
     }
     # Create chunks as jobs
-    chunks <- .tile_chunks_create(tile = tile, overlap = overlap, block = block)
-    # Calculate exclusion mask
-    if (.has(exclusion_mask)) {
-        # Remove chunks within the exclusion mask
-        chunks <- .chunks_filter_mask(
-            chunks = chunks,
-            mask = exclusion_mask
-        )
-        exclusion_mask <- .chunks_crop_mask(
-            chunks = chunks,
-            mask = exclusion_mask
-        )
-    }
+    tile_chunks <- .smooth_tile_chunks(
+        tile = tile,
+        overlap = overlap,
+        block = block,
+        exclusion_mask = exclusion_mask
+    )
+    chunks <- tile_chunks[["chunks"]]
+    exclusion_mask <- tile_chunks[["exclusion_mask"]]
     # Process jobs in parallel
     block_files <- .jobs_map_parallel_chr(chunks, function(chunk) {
         # Job block
@@ -100,6 +88,86 @@
         # Return block file
         block_file
     }, progress = progress)
+    # Merge blocks into a new probs_cube tile
+    .smooth_merge_tile(
+        tile = tile,
+        band = band,
+        out_file = out_file,
+        block_files = block_files,
+        exclusion_mask = exclusion_mask,
+        multicores = .jobs_multicores(),
+        output_dir = output_dir,
+        version = version,
+        progress = progress
+    )
+}
+#' @title Tile of a smoothed file that already exists
+#' @name .smooth_tile_from_file
+#' @keywords internal
+#' @noRd
+#' @param  tile      Tile of the probability cube
+#' @param  band      Band of the smoothed tile
+#' @param  out_file  Valid smoothed file of the tile
+#' @return           Smoothed tile
+.smooth_tile_from_file <- function(tile, band, out_file) {
+    .check_recovery()
+    .tile_derived_from_file(
+        file = out_file,
+        band = band,
+        base_tile = tile,
+        labels = .tile_labels(tile),
+        derived_class = "probs_cube",
+        update_bbox = FALSE
+    )
+}
+#' @title Chunks of a tile to be smoothed
+#' @name .smooth_tile_chunks
+#' @keywords internal
+#' @noRd
+#' @param  tile            Tile of the probability cube
+#' @param  overlap         Overlap between chunks
+#' @param  block           Block size of the chunks
+#' @param  exclusion_mask  Areas to exclude from smoothing, or NULL
+#' @return  List with the chunks outside the mask and the mask cropped to them
+.smooth_tile_chunks <- function(tile, overlap, block, exclusion_mask) {
+    chunks <- .tile_chunks_create(tile = tile, overlap = overlap, block = block)
+    # Calculate exclusion mask
+    if (.has(exclusion_mask)) {
+        # Remove chunks within the exclusion mask
+        chunks <- .chunks_filter_mask(
+            chunks = chunks,
+            mask = exclusion_mask
+        )
+        exclusion_mask <- .chunks_crop_mask(
+            chunks = chunks,
+            mask = exclusion_mask
+        )
+    }
+    list(chunks = chunks, exclusion_mask = exclusion_mask)
+}
+#' @title Merge the smoothed blocks of a tile
+#' @name .smooth_merge_tile
+#' @keywords internal
+#' @noRd
+#' @param  tile            Tile of the probability cube
+#' @param  band            Band of the smoothed tile
+#' @param  out_file        Smoothed file of the tile
+#' @param  block_files     Files of the smoothed blocks
+#' @param  exclusion_mask  Mask of \code{.smooth_tile_chunks()}, or NULL
+#' @param  multicores      Number of threads of the merge
+#' @param  output_dir      Directory where image will be save
+#' @param  version         Version of result
+#' @param  progress        Show progress bar of the crop?
+#' @return                 Smoothed tile
+.smooth_merge_tile <- function(tile,
+                               band,
+                               out_file,
+                               block_files,
+                               exclusion_mask,
+                               multicores,
+                               output_dir,
+                               version,
+                               progress) {
     # Check if there is a exclusion_mask
     # If exclusion_mask exists, blocks are merged to a different directory
     # than output_dir, which is used to save the final cropped version
@@ -120,7 +188,7 @@
         base_tile = tile,
         block_files = block_files,
         derived_class = "probs_cube",
-        multicores = .jobs_multicores(),
+        multicores = multicores,
         update_bbox = FALSE
     )
     # Exclude masked areas
@@ -157,6 +225,8 @@
 #'                           (Bayesian smoothing parameter). It can be either
 #'                           a vector or a scalar.
 #' @param  use_torch         Use torch to run the Bayesian smoother?
+#' @param  use_dataloader    Use the flow of \code{.smooth_dataloader()}?
+#' @param  readers           Number of dataloader readers of that flow.
 #' @param  multicores        Number of cores to run the smoothing function
 #' @param  memsize           Maximum overall memory (in GB) to run the
 #'                           smoothing.
@@ -172,12 +242,40 @@
                     neigh_fraction,
                     smoothness,
                     use_torch,
+                    use_dataloader,
+                    readers,
                     exclusion_mask,
                     multicores,
                     memsize,
                     output_dir,
                     version,
                     progress) {
+    # Overlapping pixels
+    overlap <- ceiling(window_size / 2L) - 1L
+    # a kernel that does not compile gives the C++ smoother below
+    if (use_dataloader) {
+        kernel <- tryCatch(
+            .torch_smooth_kernel(
+                window_size = window_size,
+                neigh_fraction = neigh_fraction
+            ),
+            error = function(e) NULL
+        )
+        if (.has(kernel)) {
+            return(.smooth_dataloader(
+                cube = cube,
+                block = block,
+                overlap = overlap,
+                exclusion_mask = exclusion_mask,
+                kernel = kernel,
+                smoothness = smoothness,
+                readers = readers,
+                output_dir = output_dir,
+                version = version,
+                progress = progress
+            ))
+        }
+    }
     # Select smoothing implementation
     smooth_fn <- if (use_torch) {
         .smooth_fn_bayes_torch
@@ -190,8 +288,6 @@
         neigh_fraction = neigh_fraction,
         smoothness = smoothness
     )
-    # Overlapping pixels
-    overlap <- ceiling(window_size / 2L) - 1L
     # Smoothing
     # Process each tile sequentially
     .cube_foreach_tile(cube, function(tile) {
@@ -208,6 +304,319 @@
             progress = progress
         )
     })
+}
+#' @title Split the processes of the dataloader flow
+#' @name .smooth_processes
+#' @keywords internal
+#' @noRd
+#' @description \code{multicores} is a budget of processes: half of it reads
+#'   blocks in the dataloader, the rest are workers of the sits cluster, at
+#'   least one of each.
+#' @param  multicores  Number of processes of the call.
+#' @return Integer vector with \code{readers} and \code{workers}.
+.smooth_processes <- function(multicores) {
+    readers <- max(1L, as.integer(multicores) %/% 2L)
+    c(readers = readers, workers = max(1L, as.integer(multicores) - readers))
+}
+#' @title Read the raw values of a block of a probability tile
+#' @name .smooth_read_raw
+#' @keywords internal
+#' @noRd
+#' @description Runs in a dataloader reader. The values are those of
+#'   \code{.tile_read_block()} before its scale, which
+#'   \code{.torch_smooth_block()} applies on the device.
+#' @param  tile   Tile of the probability cube.
+#' @param  block  Block to be read.
+#' @return Matrix \code{[nrows * ncols, nbands]} of integer values, NA where
+#'   missing.
+.smooth_read_raw <- function(tile, block) {
+    band <- .tile_bands(tile)
+    values <- .tile_read_block(tile = tile, band = band, block = block)
+    band_conf <- .tile_band_conf(tile = tile, band = band)
+    # integers are exact in the 32-bit floats of the dataloader
+    offset <- .offset(band_conf)
+    if (.has(offset) && offset != 0.0) {
+        values <- values - offset
+    }
+    scale <- .scale(band_conf)
+    if (.has(scale) && scale != 1.0) {
+        values <- values / scale
+    }
+    round(values)
+}
+#' @title Job of a sits cluster worker in the dataloader flow
+#' @name .smooth_job
+#' @keywords internal
+#' @noRd
+#' @description The one function of the cluster in
+#'   \code{.smooth_dataloader()}; the role of the job selects the step.
+#'   \code{write} writes one smoothed block, as a worker of
+#'   \code{.smooth_tile()} does; \code{merge} merges the blocks of one tile
+#'   with \code{.smooth_merge_tile()}.
+#' @param  job  List with the role, the tile index, the file, the band and
+#'   the arguments of the step.
+#' @return List with the role, the tile index and, for a merge, the tile.
+.smooth_job <- function(job) {
+    role <- job[["role"]]
+    .debug_log(
+        event = paste0("start_smooth_", role),
+        key = "file",
+        value = basename(job[["file"]])
+    )
+    band_conf <- .conf_derived_band(
+        derived_class = "probs_cube", band = job[["band"]]
+    )
+    tile <- switch(role,
+        write = {
+            chunk <- job[["chunk"]]
+            .raster_write_block(
+                files = job[["file"]],
+                block = .block(chunk),
+                bbox = .bbox(chunk),
+                values = job[["values"]],
+                data_type = .data_type(band_conf),
+                missing_value = .miss_value(band_conf),
+                crop_block = .block(.chunks_no_overlap(chunk))
+            )
+            NULL
+        },
+        merge = .smooth_merge_tile(
+            tile = job[["tile"]],
+            band = job[["band"]],
+            out_file = job[["file"]],
+            block_files = job[["block_files"]],
+            exclusion_mask = job[["exclusion_mask"]],
+            multicores = job[["multicores"]],
+            output_dir = job[["output_dir"]],
+            version = job[["version"]],
+            progress = FALSE
+        )
+    )
+    .debug_log(
+        event = paste0("end_smooth_", role),
+        key = "file",
+        value = basename(job[["file"]])
+    )
+    list(role = role, tile_index = job[["tile_index"]], tile = tile)
+}
+#' @title Smooth the tiles of a cube with a dataloader and the device
+#' @name .smooth_dataloader
+#' @keywords internal
+#' @noRd
+#' @description
+#' One dataloader reads the blocks of every tile in its reader processes.
+#' This process holds the device, smooths each block there with
+#' \code{.torch_smooth_block()} and sends it, without waiting, as a
+#' \code{write} job to the sits cluster. When the last block of a tile is
+#' written, the \code{merge} job of the tile is sent. Without a cluster the
+#' jobs run in this process. Valid tiles and block files are reused, as in
+#' \code{.smooth_tile()}.
+#'
+#' @param  cube            Probability data cube.
+#' @param  block           Block size of the chunks.
+#' @param  overlap         Overlap between chunks.
+#' @param  exclusion_mask  Areas to exclude from smoothing, or NULL.
+#' @param  kernel          Result of \code{.torch_smooth_kernel()}.
+#' @param  smoothness      Smoothness vector (one value per class).
+#' @param  readers         Number of dataloader readers.
+#' @param  output_dir      Output directory for image files.
+#' @param  version         Version of resulting image.
+#' @param  progress        Show progress bar of the blocks?
+#' @param  n_retries       Number of times a job of a failed worker is sent.
+#' @return Smoothed data cube.
+.smooth_dataloader <- function(cube,
+                               block,
+                               overlap,
+                               exclusion_mask,
+                               kernel,
+                               smoothness,
+                               readers,
+                               output_dir,
+                               version,
+                               progress,
+                               n_retries = 3L) {
+    band <- "bayes"
+    band_conf <- .conf_derived_band(derived_class = "probs_cube", band = band)
+    device <- .torch_smooth_device()
+    tiles <- slider::slide(cube, identity)
+    plans <- purrr::imap(tiles, function(tile, i) {
+        out_file <- .file_derived_name(
+            tile = tile, band = band, version = version,
+            output_dir = output_dir
+        )
+        # Resume feature
+        if (all(.raster_is_valid(out_file, output_dir = output_dir))) {
+            return(list(tile = .smooth_tile_from_file(
+                tile = tile, band = band, out_file = out_file
+            )))
+        }
+        tile_chunks <- .smooth_tile_chunks(
+            tile = tile,
+            overlap = overlap,
+            block = block,
+            exclusion_mask = exclusion_mask
+        )
+        chunks <- tile_chunks[["chunks"]]
+        block_files <- slider::slide_chr(chunks, function(chunk) {
+            .file_block_name(
+                pattern = .file_pattern(out_file),
+                block = .block(chunk),
+                output_dir = output_dir
+            )
+        })
+        # Resume processing in case of failure
+        written <- purrr::map_lgl(block_files, function(file) {
+            all(.raster_is_valid(file))
+        })
+        chunks[["tile_index"]] <- i
+        chunks[["block_file"]] <- block_files
+        list(
+            out_file = out_file,
+            block_files = block_files,
+            exclusion_mask = tile_chunks[["exclusion_mask"]],
+            in_conf = .tile_band_conf(tile = tile, band = .tile_bands(tile)),
+            todo = chunks[!written, ]
+        )
+    })
+    smoothed <- purrr::map(plans, "tile")
+    todo <- dplyr::bind_rows(purrr::map(plans, "todo"))
+    # blocks of each tile not yet written
+    left <- purrr::map_int(plans, function(plan) {
+        .default(nrow(plan[["todo"]]), 0L)
+    })
+    pb <- NULL
+    if (progress && nrow(todo) > 0L) {
+        pb <- utils::txtProgressBar(min = 0L, max = nrow(todo), style = 3L)
+        on.exit(close(pb), add = TRUE)
+    }
+    nodes <- .jobs_multicores()
+    free <- seq_len(nodes)
+    # jobs sent to the cluster and not yet answered, by tag
+    jobs <- list()
+    n_sent <- 0L
+    merge_job <- function(i) {
+        plan <- plans[[i]]
+        list(
+            role = "merge",
+            tile_index = i,
+            file = plan[["out_file"]],
+            band = band,
+            tile = tiles[[i]],
+            block_files = plan[["block_files"]],
+            exclusion_mask = plan[["exclusion_mask"]],
+            multicores = max(1L, nodes),
+            output_dir = output_dir,
+            version = version
+        )
+    }
+    done <- function(result) {
+        i <- result[["tile_index"]]
+        if (result[["role"]] == "merge") {
+            smoothed[[i]] <<- result[["tile"]]
+            return(invisible(NULL))
+        }
+        left[[i]] <<- left[[i]] - 1L
+        if (.has(pb)) {
+            utils::setTxtProgressBar(pb, utils::getTxtProgressBar(pb) + 1L)
+        }
+        if (left[[i]] == 0L) {
+            send(merge_job(i))
+        }
+        invisible(NULL)
+    }
+    # takes one result; with a timeout it returns FALSE when none arrived
+    receive <- function(timeout = NULL) {
+        d <- .parallel_poll(timeout = timeout)
+        if (is.null(d)) {
+            return(FALSE)
+        }
+        free <<- c(free, d[["node"]])
+        tag <- as.character(d[["tag"]])
+        job <- jobs[[tag]]
+        jobs[[tag]] <<- NULL
+        if (inherits(d[["value"]], "retry")) {
+            job[["retries"]] <- .default(job[["retries"]], 0L) + 1L
+            if (job[["retries"]] > n_retries) {
+                stop(.conf("messages", ".parallel_map"), call. = FALSE)
+            }
+            send(job)
+            return(TRUE)
+        }
+        .parallel_check_remote_errors(list(d[["value"]]))
+        done(d[["value"]])
+        TRUE
+    }
+    send <- function(job) {
+        if (nodes == 0L) {
+            return(done(.smooth_job(job)))
+        }
+        while (length(free) == 0L) {
+            receive()
+        }
+        node <- free[[1L]]
+        free <<- free[-1L]
+        n_sent <<- n_sent + 1L
+        jobs[[as.character(n_sent)]] <<- job
+        .parallel_submit(
+            node = node, fn = .smooth_job, args = list(job), tag = n_sent
+        )
+    }
+    # on an error, answers left in the sockets would reach the next user of
+    # the cluster, so they are taken without starting new jobs
+    on.exit(
+        tryCatch(
+            while (length(jobs) > 0L) {
+                d <- .parallel_poll()
+                jobs[[as.character(d[["tag"]])]] <- NULL
+            },
+            error = function(e) NULL
+        ),
+        add = TRUE
+    )
+    # tiles whose blocks were all written before
+    purrr::walk(
+        which(purrr::map_lgl(smoothed, is.null) & left == 0L),
+        function(i) send(merge_job(i))
+    )
+    if (nrow(todo) > 0L) {
+        iter <- .dataloader_iter(
+            chunks = todo,
+            tiles = tiles,
+            read_fn = .smooth_read_raw,
+            readers = readers
+        )
+        repeat {
+            item <- .dataloader_next(iter)
+            if (is.null(item)) {
+                break
+            }
+            chunk <- todo[item[["index"]], ]
+            block <- .block(chunk)
+            values <- .torch_smooth_block(
+                input = item[["input"]],
+                kernel = kernel,
+                smoothness = smoothness,
+                device = device,
+                in_conf = plans[[chunk[["tile_index"]]]][["in_conf"]],
+                out_conf = band_conf
+            )
+            .check_processed_values(values, .nrows(block) * .ncols(block))
+            send(list(
+                role = "write",
+                tile_index = chunk[["tile_index"]],
+                file = chunk[["block_file"]],
+                band = band,
+                chunk = chunk,
+                values = values
+            ))
+            # answers that arrived free their workers for the next blocks
+            while (nodes > 0L && receive(timeout = 0L)) NULL
+        }
+    }
+    while (length(jobs) > 0L) {
+        receive()
+    }
+    slider::slide_dfr(seq_along(smoothed), function(i) smoothed[[i]])
 }
 #' @title Define smoothing function
 #' @noRd

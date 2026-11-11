@@ -171,6 +171,7 @@ sits_smooth.probs_cube <- function(cube, ...,
     # Select the fastest available smoothing implementation
     use_torch <- .torch_smooth_available()
     use_gpu <- use_torch && .torch_gpu_available()
+    use_dataloader <- .torch_smooth_dataloader(use_torch)
     # Set the processing bloat
     if (use_gpu) {
         proc_bloat <- .conf("processing_bloat_gpu")
@@ -215,9 +216,12 @@ sits_smooth.probs_cube <- function(cube, ...,
         memsize = memsize,
         multicores = multicores
     )
-    # Avoid multiple processes competing for the same GPU
-    if (use_gpu) {
-        multicores <- 1L
+    # multicores is a budget of processes: the readers come out of it
+    readers <- 0L
+    if (use_dataloader) {
+        processes <- .smooth_processes(multicores)
+        readers <- processes[["readers"]]
+        multicores <- processes[["workers"]]
     }
     # Prepare parallel processing
     started <- .parallel_start(workers = multicores)
@@ -230,6 +234,8 @@ sits_smooth.probs_cube <- function(cube, ...,
         neigh_fraction = neigh_fraction,
         smoothness = smoothness,
         use_torch = use_torch,
+        use_dataloader = use_dataloader,
+        readers = readers,
         exclusion_mask = exclusion_mask,
         multicores = multicores,
         memsize = memsize,

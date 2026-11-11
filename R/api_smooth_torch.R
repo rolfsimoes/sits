@@ -14,6 +14,38 @@
     .torch_is_functional()
 }
 
+#' @title Check if the torch smoother runs in the dataloader flow
+#' @name .torch_smooth_dataloader
+#' @keywords internal
+#' @noRd
+#' @description The flow of \code{.smooth_dataloader()} runs when torch
+#'   smooths on a GPU, or on the CPU device when SITS_SMOOTH_FORCE_DATALOADER
+#'   is set to TRUE.
+#'
+#' @param use_torch  Result of \code{.torch_smooth_available()}.
+#' @return A logical value
+.torch_smooth_dataloader <- function(use_torch) {
+    if (!use_torch) {
+        return(FALSE)
+    }
+    force_dataloader <- Sys.getenv(
+        "SITS_SMOOTH_FORCE_DATALOADER", unset = "FALSE"
+    )
+    toupper(force_dataloader) == "TRUE" || .torch_gpu_available()
+}
+
+#' @title Device of the torch smoother
+#' @name .torch_smooth_device
+#' @keywords internal
+#' @noRd
+#' @return "cuda" or "mps" when a GPU is available, otherwise "cpu".
+.torch_smooth_device <- function() {
+    if (!.torch_gpu_available()) {
+        return("cpu")
+    }
+    if (torch::cuda_is_available()) "cuda" else "mps"
+}
+
 #' @title Estimate memory used by torch smoothing windows
 #' @name .torch_smooth_block_memsize
 #' @keywords internal
@@ -184,15 +216,7 @@ def smooth(x: Tensor, smoothness: Tensor):
                                          smoothness,
                                          kernel) {
     # Select device
-    device <- if (.torch_gpu_available()) {
-        if (torch::cuda_is_available()) {
-            "cuda"
-        } else {
-            "mps"
-        }
-    } else {
-        "cpu"
-    }
+    device <- .torch_smooth_device()
     # Number of bands in data
     nbands <- ncol(logits)
     # Build input tensor [1, nbands, nrows, ncols]
@@ -212,6 +236,69 @@ def smooth(x: Tensor, smoothness: Tensor):
     as.matrix(
         result$cpu()$to(dtype = torch::torch_float64())
     )
+}
+
+#' @title Smooth one block of raw probabilities on the device
+#' @name .torch_smooth_block
+#' @keywords internal
+#' @noRd
+#'
+#' @description
+#' The steps of the smoother of \code{.smooth_fn_bayes_torch()} and of the
+#' writer of \code{.smooth_tile()}, in the same order, on the device: scale of
+#' the input, logit, compiled kernel, inverse logit, scale of the output.
+#' Only the result comes back to the host, as integers.
+#'
+#' @param  input       Float tensor \code{[1, nbands, nrows, ncols]} of raw
+#'                     values of the input band, NaN where missing.
+#' @param  kernel      Result of \code{.torch_smooth_kernel()}.
+#' @param  smoothness  Numeric vector of length \code{nbands}.
+#' @param  device      Device of the calculation.
+#' @param  in_conf     Band configuration of the input.
+#' @param  out_conf    Band configuration of the output.
+#' @return Integer matrix \code{[nrows * ncols, nbands]} with the values to be
+#'   written, NA where the smoother gives NaN.
+.torch_smooth_block <- function(input, kernel, smoothness, device,
+                                in_conf, out_conf) {
+    float64 <- torch::torch_float64()
+    x <- input$to(device = device, dtype = float64)
+    # the operations of .tile_scale(), so the values are those of the reader
+    in_scale <- .scale(in_conf)
+    if (.has(in_scale) && in_scale != 1.0) {
+        x <- x * in_scale
+    }
+    in_offset <- .offset(in_conf)
+    if (.has(in_offset) && in_offset != 0.0) {
+        x <- x + in_offset
+    }
+    x <- x$masked_fill(x$eq(1.0), .conf("smooth_prob_max"))
+    x <- x$masked_fill(x$eq(0.0), .conf("smooth_prob_min"))
+    # logit in double precision, as R does before the kernel
+    logits <- torch::torch_log(x / (x$sum(dim = 2L, keepdim = TRUE) - x))
+    smoothness <- torch::torch_tensor(
+        smoothness,
+        dtype  = torch::torch_float32(),
+        device = device
+    )
+    unit <- .torch_smooth_kernel_unit(kernel)
+    values <- unit$smooth(logits$to(dtype = torch::torch_float32()), smoothness)
+    values <- values$to(dtype = float64)
+    values <- torch::torch_exp(values)
+    values <- values / (values + 1.0)
+    out_offset <- .offset(out_conf)
+    if (.has(out_offset) && out_offset != 0.0) {
+        values <- values - out_offset
+    }
+    out_scale <- .scale(out_conf)
+    if (.has(out_scale) && out_scale != 1.0) {
+        values <- values / out_scale
+    }
+    na_mask <- torch::torch_isnan(values)
+    # terra truncates the doubles of the CPU path written as integers
+    values <- torch::torch_floor(values)
+    # R reads the lowest 32-bit integer as NA_integer_
+    values <- values$masked_fill(na_mask, -.Machine[["integer.max"]] - 1.0)
+    torch::as_array(values$to(dtype = torch::torch_int32())$cpu())
 }
 
 #' @title Torch Bayesian smoother closure factory
