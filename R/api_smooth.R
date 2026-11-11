@@ -555,22 +555,37 @@
         }
         node <- free[[1L]]
         free <<- free[-1L]
+        sent <- tryCatch(
+            {
+                .parallel_submit(
+                    node = node, fn = .smooth_job, args = list(job),
+                    tag = n_sent + 1L
+                )
+                NULL
+            },
+            error = function(e) e
+        )
+        if (.has(sent)) {
+            # a broken send leaves the worker inside a message it never ends
+            .parallel_reset_node(node)
+            free <<- c(free, node)
+            job[["retries"]] <- .default(job[["retries"]], 0L) + 1L
+            if (job[["retries"]] > n_retries) {
+                stop(sprintf(
+                    .conf("messages", ".smooth_dataloader"),
+                    n_retries + 1L, conditionMessage(sent)
+                ), call. = FALSE)
+            }
+            return(send(job))
+        }
         n_sent <<- n_sent + 1L
         jobs[[as.character(n_sent)]] <<- job
-        .parallel_submit(
-            node = node, fn = .smooth_job, args = list(job), tag = n_sent
-        )
+        invisible(NULL)
     }
-    # on an error, answers left in the sockets would reach the next user of
-    # the cluster, so they are taken without starting new jobs
+    # on an error, a worker with a job would answer the next user of the
+    # cluster, or never; it is replaced instead of waited for
     on.exit(
-        tryCatch(
-            while (length(jobs) > 0L) {
-                d <- .parallel_poll()
-                jobs[[as.character(d[["tag"]])]] <- NULL
-            },
-            error = function(e) NULL
-        ),
+        purrr::walk(setdiff(seq_len(nodes), free), .parallel_reset_node),
         add = TRUE
     )
     # tiles whose blocks were all written before

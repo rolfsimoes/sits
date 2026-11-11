@@ -84,6 +84,7 @@ Imports:
     vctrs
 Suggests:
     arrow,
+    callr,
     caret,
     cli,
     cols4all (>= 0.8.0),

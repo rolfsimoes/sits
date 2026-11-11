@@ -115,48 +115,11 @@
         return(FALSE)
     }
     sits_env[["cluster"]] <- parallel::makePSOCKcluster(workers)
-
-    # make sure library paths is the same as actual environment
-    lib_paths <- .libPaths()
-    # it is necessary to export some keys
-    env_vars <- Sys.getenv()
-    var_prefix <- "^(SITS_|AWS_|GDAL_|TERRASCOPE_)"
-    env_vars <- as.list(env_vars[grepl(var_prefix, names(env_vars))])
-    env_vars <- c(env_vars, list(TORCH_INSTALL = "0"))
-
-    parallel::clusterExport(
+    .parallel_setup_nodes(
         cl = sits_env[["cluster"]],
-        varlist = c("lib_paths", "env_vars"),
-        envir = environment()
-    )
-    # Set .libPaths
-    parallel::clusterEvalQ(
-        cl = sits_env[["cluster"]],
-        expr = .libPaths(lib_paths)
-    )
-    # Set environment variables
-    parallel::clusterEvalQ(
-        cl = sits_env[["cluster"]],
-        expr = do.call(Sys.setenv, env_vars)
-    )
-    # Do not allow torch run with multiple threads
-    if (.torch_is_functional()) {
-        parallel::clusterEvalQ(
-            cl = sits_env[["cluster"]],
-            expr = torch::torch_set_num_threads(1L)
-        )
-    }
-    # export debug flag; .debug is passed by value (its namespace resolves
-    # on the worker at deserialization), avoiding a sits::: self-reference
-    parallel::clusterCall(
-        cl = sits_env[["cluster"]],
-        fun = .debug,
-        flag = log,
+        log = log,
         output_dir = output_dir
     )
-    # workers build their own configuration when sits is loaded: sources
-    # defined during the session must also be included in them
-    .parallel_export_sources()
     # export export_list
     if (.has(export_vars)) {
         parallel::clusterExport(
@@ -166,6 +129,67 @@
         )
     }
     TRUE
+}
+#' @title Prepare workers of the sits cluster
+#' @name .parallel_setup_nodes
+#' @keywords internal
+#' @noRd
+#' @description Gives new workers the library paths, the environment, the
+#'   torch threads, the debug flag and the sources of this process.
+#' @param cl          Cluster with the new workers.
+#' @param log         Logical indicating if log files must be written.
+#' @param output_dir  Directory of the log files.
+#' @return No value, called for side effect.
+.parallel_setup_nodes <- function(cl, log, output_dir) {
+    # make sure library paths is the same as actual environment
+    lib_paths <- .libPaths()
+    # it is necessary to export some keys
+    env_vars <- Sys.getenv()
+    var_prefix <- "^(SITS_|AWS_|GDAL_|TERRASCOPE_)"
+    env_vars <- as.list(env_vars[grepl(var_prefix, names(env_vars))])
+    env_vars <- c(env_vars, list(TORCH_INSTALL = "0"))
+
+    parallel::clusterExport(
+        cl = cl,
+        varlist = c("lib_paths", "env_vars"),
+        envir = environment()
+    )
+    # Set .libPaths
+    parallel::clusterEvalQ(
+        cl = cl,
+        expr = .libPaths(lib_paths)
+    )
+    # Set environment variables
+    parallel::clusterEvalQ(
+        cl = cl,
+        expr = do.call(Sys.setenv, env_vars)
+    )
+    # Do not allow torch run with multiple threads
+    if (.torch_is_functional()) {
+        parallel::clusterEvalQ(
+            cl = cl,
+            expr = torch::torch_set_num_threads(1L)
+        )
+    }
+    # export debug flag; .debug is passed by value (its namespace resolves
+    # on the worker at deserialization), avoiding a sits::: self-reference
+    parallel::clusterCall(
+        cl = cl,
+        fun = .debug,
+        flag = log,
+        output_dir = output_dir
+    )
+    # workers build their own configuration when sits is loaded: sources
+    # defined during the session must also be included in them
+    sources <- .conf_sources_session()
+    if (.has(sources)) {
+        parallel::clusterCall(
+            cl = cl,
+            fun = .conf_set_options,
+            sources = sources
+        )
+    }
+    invisible(NULL)
 }
 #' @title Recreates a cluster worker
 #' @name .parallel_reset_node
@@ -186,6 +210,12 @@
 
     # create a new node
     sits_env[["cluster"]][[worker_id]] <- parallel::makePSOCKcluster(1L)[[1L]]
+    # a new worker would load sits from other library paths
+    .parallel_setup_nodes(
+        cl = sits_env[["cluster"]][worker_id],
+        log = .debug(),
+        output_dir = sits_env[["output_dir"]]
+    )
 }
 
 #' @name .parallel_recv_one_data

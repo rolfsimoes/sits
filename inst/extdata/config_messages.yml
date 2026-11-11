@@ -375,6 +375,7 @@
 .signal_odd_filter_length: "sgolay needs an odd filter length n"
 .signal_filter_length: "sgolay needs filter length n larger than polynomial order p"
 .slice_dfr_numeric: "invalid index when combining tiles"
+.smooth_dataloader: "a worker of the sits cluster did not take a job in %d attempts: %s"
 .smooth_fn_bayes_torch: "torch could not compile the smoothing kernel - using the C++ smoother"
 .sources: "invalid 'sources' in config file"
 .source_bands: "requested bands not available in the selected collection"
