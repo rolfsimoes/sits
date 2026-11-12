@@ -216,10 +216,11 @@ sits_smooth.probs_cube <- function(cube, ...,
         memsize = memsize,
         multicores = multicores
     )
-    # Avoid multiple processes competing for the same GPU
-    if (use_gpu) {
-        multicores <- 1L
-    }
+    # On the device one process runs the kernel and the workers read, write
+    # and merge; SITS_SMOOTH_FORCE_GPU_FLOW runs that flow with torch on the
+    # CPU, for the tests
+    force_flow <- Sys.getenv("SITS_SMOOTH_FORCE_GPU_FLOW", unset = "FALSE")
+    device_flow <- use_torch && (use_gpu || toupper(force_flow) == "TRUE")
     # Prepare parallel processing
     # keep a debug log the caller turned on, also in the workers
     started <- .parallel_start(
@@ -240,6 +241,7 @@ sits_smooth.probs_cube <- function(cube, ...,
         neigh_fraction = neigh_fraction,
         smoothness = smoothness,
         use_torch = use_torch,
+        device_flow = device_flow,
         exclusion_mask = exclusion_mask,
         multicores = multicores,
         memsize = memsize,

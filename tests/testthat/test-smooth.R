@@ -121,3 +121,76 @@ test_that("Smoothing logs the start and end of each step", {
     expect_lt(match("start_tile", events), match("start_tile_blocks", events))
     expect_lt(match("end_tile_merge", events), match("end_tile", events))
 })
+test_that("Smoothing on the device runs the kernel here and the rest in workers", {
+    data_dir <- system.file("extdata/raster/mod13q1", package = "sits")
+    raster_cube <- sits_cube(
+        source = "BDC",
+        collection = "MOD13Q1-6.1",
+        data_dir = data_dir,
+        tiles = "012010",
+        bands = "NDVI",
+        start_date = "2013-09-14",
+        end_date = "2014-08-29",
+        progress = FALSE
+    )
+    in_dir <- file.path(tempdir(), "smooth-twin-input")
+    unlink(in_dir, recursive = TRUE)
+    dir.create(in_dir, recursive = TRUE)
+    rfor_model <- sits_train(samples_modis_ndvi, sits_rfor(num_trees = 40))
+    probs_map <- sits_classify(
+        data = raster_cube, ml_model = rfor_model,
+        output_dir = in_dir, progress = FALSE
+    )
+    # a second tile: the same probs file under another tile name
+    probs_file <- .tile_path(probs_map)
+    file.copy(probs_file, sub("_012010_", "_012011_", probs_file))
+    probs_two <- sits_cube(
+        source = "BDC", collection = "MOD13Q1-6.1", data_dir = in_dir,
+        bands = "probs", labels = .cube_labels(probs_map), progress = FALSE
+    )
+    run <- function(name, multicores, twin) {
+        withr::local_envvar(
+            SITS_SMOOTH_FORCE_GPU_FLOW = if (twin) "TRUE" else "FALSE"
+        )
+        out_dir <- file.path(tempdir(), name)
+        unlink(out_dir, recursive = TRUE)
+        dir.create(out_dir, recursive = TRUE)
+        .debug(flag = TRUE, output_dir = out_dir)
+        on.exit(.debug(flag = FALSE), add = TRUE)
+        smooth <- sits_smooth(
+            probs_two, output_dir = out_dir, multicores = multicores,
+            memsize = 4, progress = FALSE
+        )
+        files <- list.files(
+            file.path(out_dir, ".sits"), pattern = "[.]log$", full.names = TRUE
+        )
+        ev <- do.call(rbind, lapply(files, utils::read.csv, strip.white = TRUE))
+        list(smooth = smooth, ev = ev)
+    }
+    twin <- run("smooth-twin", 2, TRUE)
+    ev <- twin[["ev"]]
+    pid_of <- function(event) unique(ev[["pid"]][ev[["event"]] == event])
+    me <- Sys.getpid()
+    # the kernel runs in this process, which holds the device
+    expect_equal(pid_of("start_block_kernel"), me)
+    # the read, the write and the merge run in workers
+    for (step in c("block_data_read", "block_write", "block_gc", "tile_merge")) {
+        pids <- pid_of(paste0("start_", step))
+        expect_gt(length(pids), 0L)
+        expect_false(me %in% pids)
+    }
+    # the nine steps are all logged, as many starts as ends
+    for (step in c("call", "tile", "tile_blocks", "tile_merge", "block",
+                   "block_data_read", "block_kernel", "block_write", "block_gc")) {
+        n <- sum(ev[["event"]] == paste0("start_", step))
+        expect_gt(n, 0L)
+        expect_equal(sum(ev[["event"]] == paste0("end_", step)), n)
+    }
+    # the same output as the current flow of the torch kernel
+    current <- run("smooth-twin-current", 1, FALSE)
+    for (i in 1:2) {
+        a <- terra::values(.raster_open_rast(.tile_path(current[["smooth"]][i, ])))
+        b <- terra::values(.raster_open_rast(.tile_path(twin[["smooth"]][i, ])))
+        expect_equal(a, b)
+    }
+})

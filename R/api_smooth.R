@@ -173,6 +173,8 @@
 #'                           (Bayesian smoothing parameter). It can be either
 #'                           a vector or a scalar.
 #' @param  use_torch         Use torch to run the Bayesian smoother?
+#' @param  device_flow       Run the kernel in this process, which holds the
+#'                           device, and read, write and merge in workers?
 #' @param  multicores        Number of cores to run the smoothing function
 #' @param  memsize           Maximum overall memory (in GB) to run the
 #'                           smoothing.
@@ -188,6 +190,7 @@
                     neigh_fraction,
                     smoothness,
                     use_torch,
+                    device_flow = FALSE,
                     exclusion_mask,
                     multicores,
                     memsize,
@@ -208,6 +211,13 @@
     )
     # Overlapping pixels
     overlap <- ceiling(window_size / 2L) - 1L
+    if (device_flow) {
+        return(.smooth_device(
+            cube = cube, block = block, overlap = overlap,
+            exclusion_mask = exclusion_mask, smooth_fn = smooth_fn,
+            output_dir = output_dir, version = version, progress = progress
+        ))
+    }
     # Smoothing
     # Process each tile sequentially
     .cube_foreach_tile(cube, function(tile) {
