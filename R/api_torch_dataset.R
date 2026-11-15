@@ -205,6 +205,8 @@
             # Create tensors for min and range
             self$min <- min
             self$range <- max - min
+            # test only: the statistics, for the C++ normalization
+            self$stats <- stats
         } else {
             self$min <- NULL
             self$range <- NULL
@@ -270,12 +272,12 @@
         values <- values[!na_mask, , drop = FALSE]
         # Transform into matrix
         values <- as.matrix(.pred_features(values))
+        # test only: normalize with the C++ of the training, before the tensor
+        if (!is.null(self$min)) {
+            values <- .pred_features_normalize(values, stats = self$stats)
+        }
         # Values as tensor
         values <- torch::torch_tensor(values)
-        # Normalize values
-        if (!is.null(self$min)) {
-            values <- self$.normalize_data(values)
-        }
         # Organize either temporal or features based layout tensor
         if (self$ml_temporal_model) {
             # The reshape + permute reproduces the layout:
