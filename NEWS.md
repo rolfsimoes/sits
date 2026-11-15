@@ -77,6 +77,10 @@ remove deprecated functions. The highlights below are grouped by theme.
   of samples per class, overriding `frac` when it yields fewer samples
 * Add `seed` parameter to `sits_sample()`: the same seed gives the same
   samples and leaves the global generator as it was
+* Shuffle each whole class in `sits_sample()`: with the same seed and
+  `oversample = FALSE`, the samples of a smaller `frac` are among those of a
+  larger one. With `frac` below 1 and a fixed seed, classes after the first
+  get other samples than before
 * Add point-in-polygon sampling using `terra` and `sf` spatial indexing
 * Add `sits_sf_to_tibble()` to convert `sf` objects to `sits` tibbles
 * Improve `sits_stratified_sampling()`, including vector-cube sampling and label

@@ -47,19 +47,67 @@ test_that("Sample with seed", {
     set.seed(3L)
     expect_identical(sits_sample(cerrado_2classes, frac = 0.1), b)
     # on a L'Ecuyer-CMRG global stream, the draw goes on along it: per
-    # label in order, sample.int() of base R
+    # label in order, the start of a sample.int() of the whole class
     set.seed(3L, kind = "L'Ecuyer-CMRG")
     b <- sits_sample(cerrado_2classes, frac = 0.1, oversample = FALSE)
     set.seed(3L, kind = "L'Ecuyer-CMRG")
     rows <- unlist(purrr::map(sort(unique(cerrado_2classes[["label"]])),
         function(label) {
             rows <- which(cerrado_2classes[["label"]] == label)
-            rows[sample.int(length(rows), floor(0.1 * length(rows)))]
+            rows[sample.int(length(rows))][seq_len(floor(0.1 * length(rows)))]
         }
     ))
     expect_identical(b[["time_series"]], cerrado_2classes[["time_series"]][rows])
     set.seed(NULL, kind = "Mersenne-Twister")
     expect_error(sits_sample(cerrado_2classes, seed = "a"))
+})
+
+test_that("Sample nested with the same seed", {
+    data(cerrado_2classes)
+    samples <- cerrado_2classes
+    samples[["id"]] <- seq_len(nrow(samples))
+    # a class of 4 samples, smaller than the minimum
+    small <- samples[1:4, ]
+    small[["label"]] <- "Small"
+    small[["id"]] <- nrow(samples) + 1:4
+    samples <- dplyr::bind_rows(samples, small)
+    fracs <- c(0.01, 0.05, 0.1, 0.5, 1)
+    for (min_samples in c(0L, 6L)) {
+        draws <- purrr::map(fracs, function(frac) {
+            sits_sample(samples, frac = frac, oversample = FALSE,
+                        min_samples_class = min_samples, seed = 1524L)
+        })
+        # each draw is the start of the next one, in every class
+        for (i in seq_len(length(draws) - 1L)) {
+            for (label in unique(samples[["label"]])) {
+                small_ids <- draws[[i]][["id"]][draws[[i]][["label"]] == label]
+                large_ids <- draws[[i + 1L]][["id"]][
+                    draws[[i + 1L]][["label"]] == label
+                ]
+                expect_identical(small_ids, large_ids[seq_along(small_ids)])
+            }
+        }
+    }
+    # the minimum raises a small fraction and is capped at the class size
+    data <- sits_sample(samples, frac = 0.01, oversample = FALSE,
+                        min_samples_class = 6L, seed = 1524L)
+    expect_identical(
+        as.vector(table(data[["label"]])[c("Cerrado", "Pasture", "Small")]),
+        c(6L, 6L, 4L)
+    )
+    # with frac = 1 the order of each class is that of dplyr::slice_sample(),
+    # the draw of earlier versions
+    full <- sits_sample(samples, frac = 1, oversample = FALSE, seed = 1524L)
+    set.seed(1524L, kind = "L'Ecuyer-CMRG")
+    earlier <- purrr::map_dfr(
+        sort(unique(samples[["label"]])),
+        function(label) {
+            class_samples <- samples[samples[["label"]] == label, ]
+            dplyr::slice_sample(class_samples, n = nrow(class_samples))
+        }
+    )
+    set.seed(NULL, kind = "Mersenne-Twister")
+    expect_identical(full[["id"]], earlier[["id"]])
 })
 
 test_that("Sample reduce imbalance", {

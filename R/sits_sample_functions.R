@@ -29,6 +29,12 @@
 #'                    follows the global generator, so \code{set.seed()}
 #'                    repeats it.
 #' @return            A sits tibble with a fixed quantity of samples.
+#' @note
+#' Each class is shuffled as a whole and its first samples are kept. So,
+#' with the same \code{seed} and \code{oversample = FALSE}, the samples of
+#' a smaller \code{frac} are among those of a larger one (nested samples).
+#' With \code{frac} below 1 and a fixed seed, classes after the first get
+#' other samples than in versions before this change.
 #' @examples
 #' # Retrieve a set of time series with 2 classes
 #' data(cerrado_2classes)
@@ -73,11 +79,18 @@ sits_sample <- function(data,
             floor(frac * nrow(class_samples)),
             min_samples_class
         )
-        dplyr::slice_sample(
-            class_samples,
-            n = n_samples,
-            replace = oversample
-        )
+        if (oversample && n_samples > nrow(class_samples)) {
+            # with replacement there is no order to keep
+            return(dplyr::slice_sample(
+                class_samples,
+                n = n_samples,
+                replace = TRUE
+            ))
+        }
+        # the whole class is shuffled, so with the same seed the draw of a
+        # smaller frac is the start of the draw of a larger one
+        shuffled <- class_samples[sample.int(nrow(class_samples)), ]
+        utils::head(shuffled, n_samples)
     })
 }
 #' @title Sampling random points in a data cube

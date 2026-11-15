@@ -49,6 +49,13 @@ Takes samples from a sits tibble
              number of samples is the maximum of
              \code{floor(frac * n_class)} and \code{min_samples_class}.
 }
+\note{
+Each class is shuffled as a whole and its first samples are kept. So,
+with the same \code{seed} and \code{oversample = FALSE}, the samples of
+a smaller \code{frac} are among those of a larger one (nested samples).
+With \code{frac} below 1 and a fixed seed, classes after the first get
+other samples than in versions before this change.
+}
 \examples{
 # Retrieve a set of time series with 2 classes
 data(cerrado_2classes)
