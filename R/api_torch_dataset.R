@@ -256,7 +256,9 @@
             max <- as.numeric(.stats_q98(stats))
             # Create tensors for min and range
             self$min <- min
-            self$range <- max - min
+            # test only: subtract in float32, as .stack_module does
+            f32 <- function(x) torch::torch_tensor(x, dtype = torch::torch_float())
+            self$range <- as.numeric(f32(max) - f32(min))
         } else {
             self$min <- NULL
             self$range <- NULL
