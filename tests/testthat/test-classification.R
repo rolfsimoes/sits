@@ -360,3 +360,119 @@ test_that("Classify with another timeline - cube refused", {
         "tile timeline does not match samples timeline", fixed = TRUE
     )
 })
+
+test_that("CPU classification merges each tile in a worker", {
+    root <- file.path(tempdir(), "classify-queue")
+    unlink(root, recursive = TRUE)
+    dir.create(root, recursive = TRUE)
+    cube <- gpu_tiles_cube(root)
+    set.seed(42L)
+    rfor_model <- sits_train(samples_modis_ndvi, sits_rfor(num_trees = 40L))
+    roi <- sf::st_as_sfc(sf::st_bbox(c(
+        xmin = cube[["xmin"]][[1L]] + 40L * .tile_xres(cube[1L, ]),
+        xmax = cube[["xmax"]][[2L]] - 40L * .tile_xres(cube[1L, ]),
+        ymin = cube[["ymin"]][[1L]] + 30L * .tile_yres(cube[1L, ]),
+        ymax = cube[["ymax"]][[1L]] - 30L * .tile_yres(cube[1L, ])
+    ), crs = sf::st_crs(cube[["crs"]][[1L]])))
+    run <- function(name, multicores, roi = NULL) {
+        out_dir <- file.path(root, name)
+        dir.create(out_dir, showWarnings = FALSE)
+        on.exit(.debug(flag = FALSE), add = TRUE)
+        probs <- suppressMessages(sits_classify(
+            cube, rfor_model, roi = roi,
+            block_size = c(nrows = 64L, ncols = 64L),
+            multicores = multicores, memsize = 4L, output_dir = out_dir,
+            verbose = TRUE, progress = FALSE
+        ))
+        files <- list.files(
+            file.path(out_dir, ".sits"), pattern = "[.]log$", full.names = TRUE
+        )
+        ev <- do.call(rbind, lapply(files, utils::read.csv, strip.white = TRUE))
+        list(probs = probs, ev = ev)
+    }
+    values_of <- function(probs, i) {
+        terra::values(.raster_open_rast(.tile_path(probs[i, ])))
+    }
+    two <- run("two", 2L)
+    ev <- two[["ev"]]
+    merges <- ev[ev[["event"]] == "start_tile_merge", ]
+    expect_equal(nrow(merges), 2L)
+    # the merge runs in a worker, not in this process
+    expect_true(all(merges[["pid"]] != Sys.getpid()))
+    # the blocks of the second tile start before the first merge
+    starts <- ev[ev[["event"]] == "start_tile_blocks", ]
+    expect_equal(nrow(starts), 2L)
+    expect_lt(max(starts[["timestamp"]]), min(merges[["timestamp"]]))
+    # the events of a tile come in order
+    events <- ev[["event"]][order(ev[["timestamp"]])]
+    expect_lt(match("start_tile", events), match("start_tile_blocks", events))
+    expect_lt(
+        match("end_tile_blocks", events), match("start_tile_merge", events)
+    )
+    expect_lt(match("end_tile_merge", events), match("end_tile", events))
+    # every block logs its start and its end
+    n_blocks <- sum(ev[["event"]] == "start_block")
+    expect_gt(n_blocks, 2L)
+    expect_equal(sum(ev[["event"]] == "end_block"), n_blocks)
+    # the same probs as one core, tile by tile
+    one <- run("one", 1L)
+    expect_equal(two[["probs"]][["tile"]], c("A", "B"))
+    for (i in 1:2) {
+        expect_equal(values_of(two[["probs"]], i), values_of(one[["probs"]], i))
+    }
+    # a second call resumes the done tiles: no block runs again
+    again <- run("two", 2L)
+    expect_equal(sum(again[["ev"]][["event"]] == "start_block"), n_blocks)
+    expect_equal(
+        .tile_path(again[["probs"]][1L, ]), .tile_path(two[["probs"]][1L, ])
+    )
+    # an ROI over both tiles: cropped tiles, the same as one core
+    roi_two <- run("roi-two", 2L, roi = roi)
+    roi_one <- run("roi-one", 1L, roi = roi)
+    for (i in 1:2) {
+        expect_equal(
+            sits_bbox(roi_two[["probs"]][i, ]),
+            sits_bbox(roi_one[["probs"]][i, ])
+        )
+        expect_equal(
+            values_of(roi_two[["probs"]], i), values_of(roi_one[["probs"]], i)
+        )
+    }
+})
+
+test_that("CPU classification with an exclusion mask over tiles in two CRSs", {
+    root <- file.path(tempdir(), "classify-queue-crs")
+    unlink(root, recursive = TRUE)
+    dir.create(root, recursive = TRUE)
+    on.exit(unlink(root, recursive = TRUE), add = TRUE)
+    cube <- gpu_tiles_cube_two_crs(root)
+    set.seed(42L)
+    rfor_model <- sits_train(samples_modis_ndvi, sits_rfor(num_trees = 40L))
+    # a strip in the CRS of tile A across the border with tile B
+    xres <- .tile_xres(cube[1L, ])
+    mask <- sf::st_sf(geometry = sf::st_as_sfc(sf::st_bbox(c(
+        xmin = cube[["xmax"]][[1L]] - 30L * xres,
+        xmax = cube[["xmax"]][[1L]] + 30L * xres,
+        ymin = cube[["ymin"]][[1L]] + 20L * xres,
+        ymax = cube[["ymax"]][[1L]] - 20L * xres
+    ), crs = sf::st_crs(cube[["crs"]][[1L]]))))
+    classify <- function(data, name) {
+        out_dir <- file.path(root, name)
+        dir.create(out_dir)
+        sits_classify(
+            data, rfor_model, exclusion_mask = mask,
+            block_size = c(nrows = 64L, ncols = 64L), multicores = 2L,
+            memsize = 4L, output_dir = out_dir, progress = FALSE
+        )
+    }
+    probs <- classify(cube, "both")
+    expect_equal(probs[["tile"]], c("A", "B"))
+    # each tile alone is the reference: its jobs are not stacked with others
+    for (i in 1:2) {
+        alone <- classify(cube[i, ], paste0("alone_", i))
+        expect_equal(
+            .raster_get_values(.raster_open_rast(.tile_path(probs[i, ]))),
+            .raster_get_values(.raster_open_rast(.tile_path(alone)))
+        )
+    }
+})
