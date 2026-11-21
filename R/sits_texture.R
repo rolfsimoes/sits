@@ -137,6 +137,11 @@ sits_texture.raster_cube <- function(cube, ...,
                                            multicores = 2L,
                                            output_dir,
                                            progress = TRUE) {
+    .debug_log(event = "start_call", key = "tiles", value = nrow(cube))
+    on.exit(
+        .debug_log(event = "end_call", key = "tiles", value = nrow(cube)),
+        add = TRUE
+    )
     # Check cube
     .check_is_raster_cube(cube)
     .check_that(.cube_is_regular(cube))
@@ -229,8 +234,10 @@ sits_texture.raster_cube <- function(cube, ...,
         multicores <- 1L
     }
     # Prepare parallel processing
-    started <- .parallel_start(workers = multicores)
-    on.exit(.parallel_stop(started), add = TRUE)
+    started <- .parallel_start(
+        workers = multicores, log = .debug(), output_dir = output_dir
+    )
+    on.exit(.parallel_stop(started), add = TRUE, after = FALSE)
     # Split cube into individual tile–date features
     features_cube <- .cube_split_features(cube)
 
